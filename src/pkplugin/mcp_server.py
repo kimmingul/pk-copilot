@@ -41,6 +41,22 @@ from pkplugin.nca.engine import calculate_nca
 from pkplugin.schemas import NCAConfig
 from pkplugin.version import DEFAULTS, WNVersion
 
+# Compartmental imports — resolved lazily inside each impl to avoid hard
+# failures when the module is imported without all optional deps present.
+# (These are always available in a normal pkplugin install.)
+_COMP_AVAILABLE: bool | None = None
+
+
+def _check_comp_available() -> bool:
+    global _COMP_AVAILABLE
+    if _COMP_AVAILABLE is None:
+        try:
+            import pkplugin.comp.fitting  # noqa: F401
+            _COMP_AVAILABLE = True
+        except ImportError:
+            _COMP_AVAILABLE = False
+    return bool(_COMP_AVAILABLE)
+
 
 # ---------------------------------------------------------------------------
 # Implementation functions (testable independently of fastmcp)
@@ -673,6 +689,407 @@ def impl_summarize_nca(
     }
 
 
+def impl_list_pk_models() -> dict[str, Any]:
+    """Return all available PK model names, WinNonlin numbers, and parameters.
+
+    Refs: docs/03-algorithms/08-compartmental-models.md §1
+    """
+    from pkplugin.comp.models import REGISTRY
+
+    models: list[dict[str, Any]] = []
+    for name, spec in REGISTRY.items():
+        models.append(
+            {
+                "name": spec.name,
+                "winnonlin_model_id": spec.winnonlin_model_id,
+                "n_compartments": spec.n_compartments,
+                "route": spec.route.value,
+                "parameter_names": list(spec.parameter_names),
+                "has_michaelis_menten": spec.has_michaelis_menten,
+                "has_lag": spec.has_lag,
+            }
+        )
+    return {
+        "status": "ok",
+        "models": models,
+        "n_models": len(models),
+    }
+
+
+def impl_simulate_pk_model(
+    model_name: str,
+    params: dict[str, float],
+    dose: float,
+    times: list[float],
+    infusion_duration: float | None = None,
+    tlag: float = 0.0,
+    F: float = 1.0,
+) -> dict[str, Any]:
+    """Forward simulation returning predicted concentrations.
+
+    Uses the closed-form analytic solution for linear models when available
+    (or ODE if the model requires it).
+
+    Refs: docs/03-algorithms/08-compartmental-models.md §2–§3
+    """
+    from pkplugin.comp.models import REGISTRY
+
+    if model_name not in REGISTRY:
+        return {
+            "status": "error",
+            "error": (
+                f"Unknown model: {model_name!r}. "
+                f"Available: {sorted(REGISTRY)}"
+            ),
+        }
+
+    try:
+        from pkplugin.comp.analytic import predict
+
+        conc = predict(
+            model=model_name,
+            params=params,
+            times=times,
+            dose=dose,
+            infusion_duration=infusion_duration,
+            tlag=tlag,
+            F=F,
+        )
+        return {
+            "status": "ok",
+            "model_name": model_name,
+            "times": _serialise_for_json(list(times)),
+            "concentrations": _serialise_for_json(conc.tolist()),
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+def impl_fit_pk_model(
+    dataset_path: str,
+    model_name: str,
+    initial_params: dict[str, float],
+    dose: float | None = None,
+    dose_path: str | None = None,
+    weighting: str = "1_over_y_squared",
+    residual_error: str = "proportional",
+    use_ode: bool = False,
+    winnonlin_version: str = "6.4",
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Fit a PK compartmental model and emit audit + write fit artifacts.
+
+    Loads the dataset CSV (requires columns: time, concentration, and
+    optionally dose/subject_id), infers a single-dose IV bolus event if
+    *dose* is supplied, then delegates to
+    :func:`pkplugin.comp.fitting.fit_pk_model`.
+
+    Returns a dict with:
+      - status: "ok" | "error"
+      - run_id, audit_path, fit_csv_path, script_path
+      - parameters: {name -> {estimate, se, ci_low, ci_high}}
+      - diagnostics: {aic, bic, rss, condition_number, converged, ...}
+      - warnings
+
+    Refs: docs/03-algorithms/08-compartmental-models.md §4–§6
+    """
+    from pkplugin.comp.models import REGISTRY
+    from pkplugin.comp.fitting import (
+        FitResult,
+        WeightScheme,
+        ResidualErrorModel,
+        fit_pk_model as _fit_pk_model,
+    )
+    from pkplugin.comp.ode import DosingEvent
+
+    # --- Validate model name first so we can return a clean error ---
+    if model_name not in REGISTRY:
+        return {
+            "status": "error",
+            "error": (
+                f"Unknown model: {model_name!r}. "
+                f"Available: {sorted(REGISTRY)}"
+            ),
+        }
+
+    # --- Validate dataset path ---
+    ds_path = Path(dataset_path).resolve()
+    if not ds_path.is_file():
+        return {"status": "error", "error": f"Dataset not found: {ds_path}"}
+
+    # --- Load dataset ---
+    try:
+        df = pd.read_csv(ds_path)
+    except Exception as exc:
+        return {"status": "error", "error": f"Failed to read CSV: {exc}"}
+
+    required_cols = {"time", "concentration"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        return {
+            "status": "error",
+            "error": f"Missing required columns: {sorted(missing)}",
+        }
+
+    import numpy as np
+
+    # Use first subject if subject_id column is present, otherwise treat all rows
+    if "subject_id" in df.columns:
+        subject_ids = df["subject_id"].unique()
+        sub_df = df[df["subject_id"] == subject_ids[0]].copy()
+    else:
+        sub_df = df.copy()
+
+    sub_df = sub_df.dropna(subset=["time", "concentration"])
+    times_arr = np.asarray(sub_df["time"].tolist(), dtype=np.float64)
+    conc_arr = np.asarray(sub_df["concentration"].tolist(), dtype=np.float64)
+
+    # --- Build dosing events ---
+    ev_list: list[DosingEvent] | None = None
+    dose_path_resolved: Path | None = None
+
+    if dose_path is not None:
+        dose_path_resolved = Path(dose_path).resolve()
+        if not dose_path_resolved.is_file():
+            return {
+                "status": "error",
+                "error": f"Dose file not found: {dose_path_resolved}",
+            }
+        try:
+            dose_df = pd.read_csv(dose_path_resolved)
+        except Exception as exc:
+            return {"status": "error", "error": f"Failed to read dose CSV: {exc}"}
+
+        ev_list = []
+        for _, row in dose_df.iterrows():
+            route_str = str(row.get("route", "iv_bolus")).lower().replace(" ", "_")
+            if route_str not in ("iv_bolus", "iv_infusion", "oral"):
+                route_str = "iv_bolus"
+            infusion_dur: float | None = None
+            if route_str == "iv_infusion" and "infusion_duration" in dose_df.columns:
+                infusion_dur = float(row["infusion_duration"])
+            ev_list.append(
+                DosingEvent(
+                    time=float(row.get("time", 0.0)),
+                    amount=float(row["amount"]),
+                    route=route_str,  # type: ignore[arg-type]
+                    infusion_duration=infusion_dur,
+                )
+            )
+    elif dose is None and "dose" in sub_df.columns:
+        dose_vals = sub_df["dose"].dropna()
+        if not dose_vals.empty:
+            dose = float(dose_vals.iloc[0])
+
+    # Validate weighting / residual_error literals before passing
+    _valid_weightings = {
+        "uniform",
+        "1_over_y",
+        "1_over_y_squared",
+        "1_over_pred",
+        "1_over_pred_squared",
+    }
+    _valid_residual = {"additive", "proportional", "combined"}
+    if weighting not in _valid_weightings:
+        return {
+            "status": "error",
+            "error": (
+                f"Invalid weighting {weighting!r}. "
+                f"Choose from: {sorted(_valid_weightings)}"
+            ),
+        }
+    if residual_error not in _valid_residual:
+        return {
+            "status": "error",
+            "error": (
+                f"Invalid residual_error {residual_error!r}. "
+                f"Choose from: {sorted(_valid_residual)}"
+            ),
+        }
+
+    # --- Run fit ---
+    try:
+        fit: FitResult = _fit_pk_model(
+            times=times_arr,
+            observed=conc_arr,
+            model_name=model_name,
+            initial_params=initial_params,
+            dose=dose,
+            dosing_events=ev_list,
+            weighting=weighting,  # type: ignore[arg-type]
+            residual_error=residual_error,  # type: ignore[arg-type]
+            use_ode=use_ode,
+        )
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    # --- Build parameter summary ---
+    spec = REGISTRY[model_name]
+    parameters: dict[str, dict[str, Any]] = {}
+    for pname, est in fit.parameters.items():
+        se = fit.standard_errors.get(pname)
+        ci = fit.confidence_intervals.get(pname)
+        parameters[pname] = {
+            "estimate": _serialise_for_json(est),
+            "se": _serialise_for_json(se),
+            "ci_low": _serialise_for_json(ci[0] if ci else None),
+            "ci_high": _serialise_for_json(ci[1] if ci else None),
+        }
+
+    diagnostics: dict[str, Any] = {
+        "aic": _serialise_for_json(fit.diagnostics.aic),
+        "bic": _serialise_for_json(fit.diagnostics.bic),
+        "rss": _serialise_for_json(fit.diagnostics.rss),
+        "n_obs": fit.diagnostics.n_obs,
+        "n_params_estimated": fit.diagnostics.n_params_estimated,
+        "condition_number": _serialise_for_json(fit.diagnostics.condition_number),
+        "converged": fit.diagnostics.converged,
+        "method": fit.diagnostics.method,
+    }
+
+    # --- Audit ---
+    input_paths: list[str | Path] = [ds_path]
+    if dose_path_resolved is not None:
+        input_paths.append(dose_path_resolved)
+
+    entry: AuditEntry = new_entry(
+        tool="fit_pk_model",
+        config={
+            "model_name": model_name,
+            "initial_params": initial_params,
+            "dose": dose,
+            "weighting": weighting,
+            "residual_error": residual_error,
+            "use_ode": use_ode,
+            "winnonlin_version": winnonlin_version,
+            "winnonlin_model_id": spec.winnonlin_model_id,
+        },
+        input_paths=input_paths,
+        winnonlin_compat=winnonlin_version,
+    )
+    run_id = entry.run_id
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    # Write fit_result.csv
+    fit_rows: list[dict[str, Any]] = []
+    for pname, pinfo in parameters.items():
+        fit_rows.append(
+            {
+                "run_id": run_id,
+                "model": model_name,
+                "parameter": pname,
+                "estimate": pinfo["estimate"],
+                "se": pinfo["se"],
+                "ci_low": pinfo["ci_low"],
+                "ci_high": pinfo["ci_high"],
+            }
+        )
+    fit_csv_path = run_dir / "fit_result.csv"
+    pd.DataFrame(fit_rows).to_csv(fit_csv_path, index=False)
+
+    # Write reproducible script
+    script_path = run_dir / "fit_script.py"
+    script_path.write_text(
+        _render_fit_script(ds_path, dose_path_resolved, model_name, initial_params, dose, weighting, residual_error, use_ode, winnonlin_version)
+    )
+
+    entry.results = {
+        "model_name": model_name,
+        "winnonlin_model_id": spec.winnonlin_model_id,
+        "parameters": parameters,
+        "diagnostics": diagnostics,
+        "n_subjects_fitted": 1,
+    }
+    entry.warnings = fit.warnings
+    entry.artifacts = [
+        {
+            "name": "fit_result.csv",
+            "path": str(fit_csv_path),
+            "sha256": file_sha256(fit_csv_path),
+        },
+        {
+            "name": "fit_script.py",
+            "path": str(script_path),
+            "sha256": file_sha256(script_path),
+        },
+    ]
+    audit_json_path = entry.write(audit_base)
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "audit_path": str(audit_json_path),
+        "fit_csv_path": str(fit_csv_path),
+        "script_path": str(script_path),
+        "model_name": model_name,
+        "winnonlin_model_id": spec.winnonlin_model_id,
+        "parameters": parameters,
+        "diagnostics": diagnostics,
+        "warnings": fit.warnings,
+    }
+
+
+def _render_fit_script(
+    dataset: Path,
+    dose_path: Path | None,
+    model_name: str,
+    initial_params: dict[str, float],
+    dose: float | None,
+    weighting: str,
+    residual_error: str,
+    use_ode: bool,
+    winnonlin_version: str,
+) -> str:
+    """Render a reproducible Python script for the fit."""
+    dose_block = (
+        f"    dose={dose!r},"
+        if dose is not None and dose_path is None
+        else "    dosing_events=dosing_events,"
+    )
+    dose_load_block = ""
+    if dose_path is not None:
+        dose_load_block = (
+            f"import pandas as _dose_df_mod\n"
+            f"_dose_df = _dose_df_mod.read_csv(Path({str(dose_path)!r}))\n"
+            f"from pkplugin.comp.ode import DosingEvent\n"
+            f"dosing_events = [\n"
+            f"    DosingEvent(time=float(r['time']), amount=float(r['amount']),\n"
+            f"                route=str(r.get('route', 'iv_bolus')))\n"
+            f"    for _, r in _dose_df.iterrows()\n"
+            f"]\n"
+        )
+    return (
+        f"# Auto-generated reproducible PK fit script\n"
+        f"# pk-copilot {PKPLUGIN_VERSION}  |  WinNonlin compat {winnonlin_version}\n"
+        f"from pathlib import Path\n"
+        f"import numpy as np\n"
+        f"import pandas as pd\n"
+        f"from pkplugin.comp.fitting import fit_pk_model\n"
+        f"\n"
+        f"df = pd.read_csv(Path({str(dataset)!r}))\n"
+        f"times = np.asarray(df['time'].tolist(), dtype=np.float64)\n"
+        f"conc  = np.asarray(df['concentration'].tolist(), dtype=np.float64)\n"
+        f"{dose_load_block}\n"
+        f"result = fit_pk_model(\n"
+        f"    times=times,\n"
+        f"    observed=conc,\n"
+        f"    model_name={model_name!r},\n"
+        f"    initial_params={initial_params!r},\n"
+        f"    {dose_block}\n"
+        f"    weighting={weighting!r},\n"
+        f"    residual_error={residual_error!r},\n"
+        f"    use_ode={use_ode!r},\n"
+        f")\n"
+        f"print('Parameters:', result.parameters)\n"
+        f"print('AIC:', result.diagnostics.aic)\n"
+        f"print('BIC:', result.diagnostics.bic)\n"
+        f"print('Converged:', result.diagnostics.converged)\n"
+    )
+
+
 def impl_get_winnonlin_versions() -> dict[str, Any]:
     """List supported WinNonlin versions + their default option matrix."""
     return {
@@ -774,6 +1191,53 @@ def _build_mcp() -> Any:
     def get_pkplugin_version() -> str:
         """Return installed pk-copilot version."""
         return impl_get_pkplugin_version()
+
+    @mcp.tool
+    def list_pk_models() -> dict[str, Any]:
+        """Return all available PK compartmental model names, WinNonlin numbers, and parameters."""
+        return impl_list_pk_models()
+
+    @mcp.tool
+    def simulate_pk_model(
+        model_name: str,
+        params: dict[str, float],
+        dose: float,
+        times: list[float],
+        infusion_duration: float | None = None,
+        tlag: float = 0.0,
+        F: float = 1.0,
+    ) -> dict[str, Any]:
+        """Forward simulate a PK compartmental model; returns {times, concentrations}."""
+        return impl_simulate_pk_model(
+            model_name, params, dose, times, infusion_duration, tlag, F
+        )
+
+    @mcp.tool
+    def fit_pk_model(
+        dataset_path: str,
+        model_name: str,
+        initial_params: dict[str, float],
+        dose: float | None = None,
+        dose_path: str | None = None,
+        weighting: str = "1_over_y_squared",
+        residual_error: str = "proportional",
+        use_ode: bool = False,
+        winnonlin_version: str = "6.4",
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Fit a PK compartmental model + emit audit + write fit artifacts."""
+        return impl_fit_pk_model(
+            dataset_path,
+            model_name,
+            initial_params,
+            dose,
+            dose_path,
+            weighting,
+            residual_error,
+            use_ode,
+            winnonlin_version,
+            audit_dir,
+        )
 
     return mcp
 
