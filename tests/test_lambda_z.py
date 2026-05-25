@@ -10,10 +10,9 @@ from __future__ import annotations
 
 import math
 
-import numpy as np
 import pytest
 
-from pkplugin.nca.lambda_z import LambdaZResult, estimate_c0_log_back_extrap, fit_lambda_z
+from pkplugin.nca.lambda_z import estimate_c0_log_back_extrap, fit_lambda_z
 
 # ---------------------------------------------------------------------------
 # Fixtures / helpers
@@ -108,9 +107,7 @@ def test_lambda_z_manual_indices() -> None:
     times = TIMES_FULL
     concs = _pure_exp(times)
     # indices 4,5,6,7 → t=8,12,16,24
-    result = fit_lambda_z(
-        times, concs, tmax=0.0, method="manual", manual={"indices": [4, 5, 6, 7]}
-    )
+    result = fit_lambda_z(times, concs, tmax=0.0, method="manual", manual={"indices": [4, 5, 6, 7]})
 
     assert result.lambda_z is not None
     assert result.n_points == 4
@@ -136,9 +133,7 @@ def test_lambda_z_manual_n_last() -> None:
     """Manual n_last: uses the last n post-tmax observations."""
     times = TIMES_FULL
     concs = _pure_exp(times)
-    result = fit_lambda_z(
-        times, concs, tmax=0.0, method="manual", manual={"n_last": 4}
-    )
+    result = fit_lambda_z(times, concs, tmax=0.0, method="manual", manual={"n_last": 4})
 
     assert result.lambda_z is not None
     assert result.n_points == 4

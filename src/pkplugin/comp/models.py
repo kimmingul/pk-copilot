@@ -12,7 +12,7 @@ Refs:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Literal
 
@@ -161,7 +161,5 @@ def get_model(name: str) -> PKModelSpec:
     Refs: docs/03-algorithms/08-compartmental-models.md §1
     """
     if name not in REGISTRY:
-        raise ValueError(
-            f"Unknown PK model: {name!r}. Available: {sorted(REGISTRY)}"
-        )
+        raise ValueError(f"Unknown PK model: {name!r}. Available: {sorted(REGISTRY)}")
     return REGISTRY[name]

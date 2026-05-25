@@ -25,12 +25,9 @@ import warnings
 import pytest
 
 from pkplugin.nca.stats import (
-    DescriptiveSummary,
-    GroupedStats,
     summarize_nca_results,
     summarize_values,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -92,8 +89,8 @@ def test_known_mean_sd_median() -> None:
     assert result.median == pytest.approx(4.5)
     assert result.min == pytest.approx(2.0)
     assert result.max == pytest.approx(9.0)
-    assert result.q1 == pytest.approx(4.0)   # numpy linear interp: 25th pct of 8 pts
-    assert result.q3 == pytest.approx(5.5)   # numpy linear interp: 75th pct of 8 pts
+    assert result.q1 == pytest.approx(4.0)  # numpy linear interp: 25th pct of 8 pts
+    assert result.q3 == pytest.approx(5.5)  # numpy linear interp: 75th pct of 8 pts
 
 
 # ---------------------------------------------------------------------------
@@ -144,9 +141,11 @@ def test_all_zero_geo_mean_none() -> None:
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         result = summarize_values([0.0, 0.0, 0.0], parameter="Zeros")
-        assert any("geo_mean" in str(warning.message).lower() or
-                   "non-positive" in str(warning.message).lower()
-                   for warning in w)
+        assert any(
+            "geo_mean" in str(warning.message).lower()
+            or "non-positive" in str(warning.message).lower()
+            for warning in w
+        )
 
     assert result.geo_mean is None
     assert result.geo_cv_pct is None
@@ -238,7 +237,7 @@ def test_summarize_nca_results_grouping_and_counts() -> None:
     for i, cmax in enumerate(cmax_test):
         results.append(
             _make_nca_result(
-                subject_id=f"S{i+1:03d}",
+                subject_id=f"S{i + 1:03d}",
                 treatment="Test",
                 period="1",
                 analyte="parent",
@@ -248,7 +247,7 @@ def test_summarize_nca_results_grouping_and_counts() -> None:
     for i, cmax in enumerate(cmax_ref):
         results.append(
             _make_nca_result(
-                subject_id=f"S{i+1:03d}",
+                subject_id=f"S{i + 1:03d}",
                 treatment="Reference",
                 period="1",
                 analyte="parent",
@@ -281,7 +280,7 @@ def test_cmax_stats_match_hand_computed() -> None:
     cmax_test = [100.0, 120.0, 110.0]
     results = [
         _make_nca_result(
-            subject_id=f"S{i+1:03d}",
+            subject_id=f"S{i + 1:03d}",
             treatment="Test",
             period="1",
             analyte="parent",
@@ -299,9 +298,7 @@ def test_cmax_stats_match_hand_computed() -> None:
     summary = grouped[0].by_parameter["Cmax"]
 
     expected_mean = sum(cmax_test) / 3  # 110.0
-    expected_sd = math.sqrt(
-        sum((x - expected_mean) ** 2 for x in cmax_test) / 2
-    )  # ddof=1
+    expected_sd = math.sqrt(sum((x - expected_mean) ** 2 for x in cmax_test) / 2)  # ddof=1
 
     assert summary.n == 3
     assert summary.mean == pytest.approx(expected_mean)
@@ -389,8 +386,16 @@ def test_no_numpy_types_in_summary() -> None:
     result = summarize_values(data)
 
     for fname in (
-        "mean", "sd", "cv_pct", "geo_mean", "geo_cv_pct",
-        "median", "min", "max", "q1", "q3",
+        "mean",
+        "sd",
+        "cv_pct",
+        "geo_mean",
+        "geo_cv_pct",
+        "median",
+        "min",
+        "max",
+        "q1",
+        "q3",
     ):
         val = getattr(result, fname)
         if val is not None:
@@ -412,7 +417,6 @@ def test_no_numpy_types_in_summary() -> None:
 
 def test_geo_cv_pct_formula() -> None:
     """geo_cv_pct = 100 * sqrt(exp(var_ln) - 1) where var_ln is ddof=1 variance of ln(x)."""
-    import numpy as np
 
     data = [1.0, 2.0, 4.0, 8.0]
     result = summarize_values(data)

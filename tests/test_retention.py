@@ -16,8 +16,8 @@ from __future__ import annotations
 
 import os
 import stat
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 
 import pytest
 
@@ -33,16 +33,13 @@ from pkplugin.compliance.retention import (
 )
 from pkplugin.compliance.signatures import generate_keypair, save_private_key, sign_run
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def _future_expiry() -> str:
-    return (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+    return (datetime.now(UTC) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _make_run_dir(tmp_path: Path, name: str = "test-run-lock") -> Path:
@@ -96,7 +93,12 @@ def test_lock_run_missing_signatures(tmp_path: Path) -> None:
     kp = generate_keypair()
     kp_path = tmp_path / "authored.key"
     save_private_key(kp, kp_path)
-    sign_run(run_dir=run_dir, signer_id="analyst@example.com", meaning="authored", private_key_path=kp_path)
+    sign_run(
+        run_dir=run_dir,
+        signer_id="analyst@example.com",
+        meaning="authored",
+        private_key_path=kp_path,
+    )
 
     with pytest.raises(ValueError, match="missing required signatures"):
         lock_run(run_dir, locked_by="admin@example.com", lock_reason="Too early")
@@ -309,9 +311,8 @@ def test_unlock_expired_session_raises(tmp_path: Path) -> None:
 
     # Admin with EXPIRED session
     from datetime import timedelta
-    expired_expiry = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    )
+
+    expired_expiry = (datetime.now(UTC) - timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     admin = Principal(
         user_id="admin@example.com",
         role=Role.ADMIN,

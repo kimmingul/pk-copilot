@@ -24,7 +24,7 @@ import hashlib
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -80,9 +80,9 @@ class LockError(Exception):
 
 _BUNDLE_EXCLUSIONS = {
     _LOCK_FILE,
-    "signatures.jsonl",   # separate from bundle content (signatures reference bundle hash)
+    "signatures.jsonl",  # separate from bundle content (signatures reference bundle hash)
     "audit-chain.jsonl",  # operational audit log
-    "chain.key",          # HMAC key
+    "chain.key",  # HMAC key
 }
 
 
@@ -184,10 +184,7 @@ def lock_run(
         covered_by: dict[str, set[str]] = {}
         for meaning, signer_id in meaning_to_signer.items():
             covered_by.setdefault(signer_id, set()).add(meaning)
-        offenders = [
-            sid for sid, meanings in covered_by.items()
-            if required_set.issubset(meanings)
-        ]
+        offenders = [sid for sid, meanings in covered_by.items() if required_set.issubset(meanings)]
         if offenders:
             raise LockError(
                 f"Separation-of-duties violation: signer(s) {offenders} "
@@ -198,7 +195,7 @@ def lock_run(
     # Compute bundle hash
     bundle_sha256 = _compute_bundle_sha256(run_dir)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     locked_at_utc = now.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
     manifest = LockManifest(
@@ -266,10 +263,10 @@ def verify_lock(run_dir: Path) -> tuple[bool, list[str]]:
 
 def unlock_run(
     run_dir: Path,
-    admin_principal: "Principal",
+    admin_principal: Principal,
     unlock_reason: str,
     *,
-    chain: "AuditChain",
+    chain: AuditChain,
 ) -> None:
     """Admin-only emergency unlock.
 
@@ -305,10 +302,9 @@ def unlock_run(
 
     # M1: Also verify session has not expired
     from pkplugin.compliance.access import is_session_valid
+
     if not is_session_valid(admin_principal):
-        raise UnlockError(
-            f"admin session expired for {admin_principal.user_id!r}"
-        )
+        raise UnlockError(f"admin session expired for {admin_principal.user_id!r}")
 
     # Record unlock event in the audit chain BEFORE modifying files
     chain.append(

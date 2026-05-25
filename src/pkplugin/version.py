@@ -25,15 +25,14 @@ class WNVersion(str, Enum):
     LATEST = "compat-latest"
 
     @classmethod
-    def parse(cls, value: str | "WNVersion") -> "WNVersion":
+    def parse(cls, value: str | WNVersion) -> WNVersion:
         if isinstance(value, WNVersion):
             return value
         try:
             return cls(value)
         except ValueError as exc:
             raise ValueError(
-                f"Unsupported winnonlin_version={value!r}. "
-                f"Use one of {[v.value for v in cls]}."
+                f"Unsupported winnonlin_version={value!r}. Use one of {[v.value for v in cls]}."
             ) from exc
 
 

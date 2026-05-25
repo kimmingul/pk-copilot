@@ -18,9 +18,8 @@ Usage::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
-
 
 # ---------------------------------------------------------------------------
 # Roles
@@ -96,9 +95,7 @@ def check_permission(principal: Principal, required: str) -> None:
     """
     # MINOR-4: Reject expired sessions before checking role permissions
     if not is_session_valid(principal):
-        raise AccessDeniedError(
-            f"User {principal.user_id!r} session has expired"
-        )
+        raise AccessDeniedError(f"User {principal.user_id!r} session has expired")
 
     allowed = ROLE_PERMISSIONS.get(principal.role, set())
     if required not in allowed:
@@ -117,13 +114,13 @@ def is_session_valid(principal: Principal, now: datetime | None = None) -> bool:
         now: Current UTC time; defaults to ``datetime.now(timezone.utc)``.
     """
     if now is None:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
     try:
         # Parse ISO 8601 — handle both Z suffix and +00:00
         expiry_str = principal.session_expires_utc.replace("Z", "+00:00")
         expiry = datetime.fromisoformat(expiry_str)
         if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
+            expiry = expiry.replace(tzinfo=UTC)
         return now < expiry
     except ValueError:
         return False

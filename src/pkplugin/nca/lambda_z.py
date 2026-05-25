@@ -12,12 +12,12 @@ Refs:
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-
 
 LambdaZMethod = Literal["best_fit", "adj_r2", "manual", "time_range", "n_points"]
 
@@ -27,9 +27,9 @@ _ExcludedPoint = dict[str, object]
 
 @dataclass(frozen=True)
 class LambdaZResult:
-    lambda_z: float | None          # 1/time (positive). None if not estimable.
-    intercept: float | None         # log-scale (ln of C(0) of regression)
-    half_life: float | None         # ln(2) / lambda_z
+    lambda_z: float | None  # 1/time (positive). None if not estimable.
+    intercept: float | None  # log-scale (ln of C(0) of regression)
+    half_life: float | None  # ln(2) / lambda_z
     r_squared: float | None
     adjusted_r_squared: float | None
     n_points: int
@@ -37,7 +37,7 @@ class LambdaZResult:
     t_end: float | None
     span_ratio: float | None
     method: LambdaZMethod
-    clast_pred: float | None        # exp(intercept - lambda_z * tlast)
+    clast_pred: float | None  # exp(intercept - lambda_z * tlast)
     excluded_points: list[_ExcludedPoint] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -113,9 +113,7 @@ def _build_result(
     clast_pred = math.exp(intercept - lambda_z * tlast)
     t_start = float(t_arr[0])
     t_end = float(t_arr[-1])
-    span_ratio: float | None = (
-        (t_end - t_start) / half_life if half_life > 0.0 else None
-    )
+    span_ratio: float | None = (t_end - t_start) / half_life if half_life > 0.0 else None
     warnings: list[str] = []
     if span_ratio is not None and span_ratio < span_ratio_min:
         warnings.append("span_ratio_low")
@@ -204,9 +202,7 @@ def fit_lambda_z(
     positive_finite_mask: NDArray[np.bool_] = np.isfinite(c_all) & (c_all > 0)
     for i in range(len(t_all)):
         if not post_mask[i]:
-            excluded_points.append(
-                {"index": i, "time": float(t_all[i]), "reason": "pre_tmax"}
-            )
+            excluded_points.append({"index": i, "time": float(t_all[i]), "reason": "pre_tmax"})
         elif not positive_finite_mask[i]:
             excluded_points.append(
                 {
@@ -278,8 +274,8 @@ def _fit_auto(
 
     for n in range(min_points, n_post + 1):
         # Subset: last n points (most-recent)
-        t_sub: _F64 = t_post[n_post - n:]
-        c_sub: _F64 = c_post[n_post - n:]
+        t_sub: _F64 = t_post[n_post - n :]
+        c_sub: _F64 = c_post[n_post - n :]
         fit = _fit_subset(t_sub, c_sub)
         if fit is None:
             continue
@@ -349,9 +345,7 @@ def _fit_manual(
         indices: list[int] = [int(i) for i in raw_indices]
         for idx in indices:
             if idx < 0 or idx >= len(t_all):
-                return _make_failure(
-                    method, "manual_index_out_of_range", excluded_points
-                )
+                return _make_failure(method, "manual_index_out_of_range", excluded_points)
         t_sub = t_all[indices]
         c_sub = c_all[indices]
 
@@ -397,9 +391,7 @@ def _fit_manual(
     clast_pred = math.exp(intercept - lz * tlast)
     t_start_out = float(t_sub[0])
     t_end_out = float(t_sub[-1])
-    span_ratio: float | None = (
-        (t_end_out - t_start_out) / half_life if half_life > 0.0 else None
-    )
+    span_ratio: float | None = (t_end_out - t_start_out) / half_life if half_life > 0.0 else None
     warnings: list[str] = []
     if span_ratio is not None and span_ratio < span_ratio_min:
         warnings.append("span_ratio_low")

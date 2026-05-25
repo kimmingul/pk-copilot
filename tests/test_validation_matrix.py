@@ -68,14 +68,10 @@ def _collect_failures(
         actual_val = actual.get(param)
         if exp_val is None:
             if actual_val is not None:
-                failures.append(
-                    f"  {param}: expected absent (None), got {actual_val!r}"
-                )
+                failures.append(f"  {param}: expected absent (None), got {actual_val!r}")
             continue
         if actual_val is None:
-            failures.append(
-                f"  {param}: expected {exp_val!r}, engine returned None"
-            )
+            failures.append(f"  {param}: expected {exp_val!r}, engine returned None")
             continue
         if not isinstance(actual_val, float) or not isinstance(exp_val, float):
             failures.append(
@@ -84,9 +80,7 @@ def _collect_failures(
             continue
         if exp_val == 0.0:
             if abs(actual_val) >= 1e-12:
-                failures.append(
-                    f"  {param}: expected 0.0, got {actual_val!r}"
-                )
+                failures.append(f"  {param}: expected 0.0, got {actual_val!r}")
         else:
             rel_err = abs((actual_val - exp_val) / exp_val)
             if rel_err > tol:
@@ -108,8 +102,7 @@ def test_full_golden_matrix(version: str) -> None:
     golden_dir = GOLDEN_ROOT / f"winnonlin-{version}"
     golden_file = golden_dir / "expected.json"
     assert golden_file.exists(), (
-        f"Golden file not found: {golden_file}. "
-        f"Run scripts/golden_regen.py {version} to create it."
+        f"Golden file not found: {golden_file}. Run scripts/golden_regen.py {version} to create it."
     )
 
     golden: dict[str, object] = json.loads(golden_file.read_text())  # type: ignore[assignment]
@@ -120,8 +113,7 @@ def test_full_golden_matrix(version: str) -> None:
     csv_name: str = str(golden["input_csv"])
     csv_path = golden_dir / csv_name
     assert csv_path.exists(), (
-        f"Input CSV not found: {csv_path}. "
-        f"Golden file references {csv_name!r} but it is missing."
+        f"Input CSV not found: {csv_path}. Golden file references {csv_name!r} but it is missing."
     )
 
     tol: float = float(golden["tolerance_relative"])  # type: ignore[arg-type]
@@ -146,6 +138,4 @@ def test_full_golden_matrix(version: str) -> None:
         all_failures.extend(failures)
 
     if all_failures:
-        pytest.fail(
-            f"Golden matrix failures for v{version}:\n" + "\n".join(all_failures)
-        )
+        pytest.fail(f"Golden matrix failures for v{version}:\n" + "\n".join(all_failures))

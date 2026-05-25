@@ -15,7 +15,6 @@ from typing import Any
 
 import pandas as pd
 
-from pkplugin.cdisc.adam import ADPC_VARIABLES, ADPP_VARIABLES
 from pkplugin.cdisc.paramcd import PARAMCD_REGISTRY
 
 # ---------------------------------------------------------------------------
@@ -29,9 +28,7 @@ _SEVERITY_WARNING = "WARNING"
 _USUBJID_RE = re.compile(r"^[A-Za-z0-9]+-[A-Za-z0-9]")
 
 # ISO 8601 datetime: minimal pattern
-_ISO8601_DT_RE = re.compile(
-    r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?([+-]\d{2}:\d{2}|Z)?)?$"
-)
+_ISO8601_DT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?([+-]\d{2}:\d{2}|Z)?)?$")
 
 # Required columns for ADPC and ADPP
 _ADPC_REQUIRED = {"STUDYID", "USUBJID", "PARAMCD", "AVAL", "AVALU"}
@@ -83,9 +80,7 @@ def _check_required_columns(
     return issues
 
 
-def _check_usubjid_format(
-    df: pd.DataFrame, domain: str
-) -> list[dict[str, Any]]:
+def _check_usubjid_format(df: pd.DataFrame, domain: str) -> list[dict[str, Any]]:
     """Warn when USUBJID does not match <STUDYID>-<SUBJID> pattern."""
     if "USUBJID" not in df.columns:
         return []
@@ -97,7 +92,7 @@ def _check_usubjid_format(
                 _issue(
                     _SEVERITY_WARNING,
                     f"{domain}-002",
-                    f"USUBJID does not match expected <STUDYID>-<SUBJID> format",
+                    "USUBJID does not match expected <STUDYID>-<SUBJID> format",
                     row_index=int(str(i)),
                     column="USUBJID",
                     value=val_str,
@@ -106,9 +101,7 @@ def _check_usubjid_format(
     return issues
 
 
-def _check_paramcd_in_ct(
-    df: pd.DataFrame, domain: str
-) -> list[dict[str, Any]]:
+def _check_paramcd_in_ct(df: pd.DataFrame, domain: str) -> list[dict[str, Any]]:
     """Error when PARAMCD values are not in the CDISC CT registry."""
     if "PARAMCD" not in df.columns:
         return []
@@ -135,9 +128,7 @@ def _check_paramcd_in_ct(
     return issues
 
 
-def _check_aval_numeric(
-    df: pd.DataFrame, domain: str
-) -> list[dict[str, Any]]:
+def _check_aval_numeric(df: pd.DataFrame, domain: str) -> list[dict[str, Any]]:
     """Error when AVAL column contains non-numeric values."""
     if "AVAL" not in df.columns:
         return []
@@ -153,7 +144,7 @@ def _check_aval_numeric(
                     _issue(
                         _SEVERITY_ERROR,
                         f"{domain}-004",
-                        f"AVAL must be numeric, got string value",
+                        "AVAL must be numeric, got string value",
                         row_index=int(str(i)),
                         column="AVAL",
                         value=val,
@@ -162,9 +153,7 @@ def _check_aval_numeric(
     return issues
 
 
-def _check_adtm_iso8601(
-    df: pd.DataFrame, domain: str
-) -> list[dict[str, Any]]:
+def _check_adtm_iso8601(df: pd.DataFrame, domain: str) -> list[dict[str, Any]]:
     """Warn when ADTM values are not valid ISO 8601 datetime strings."""
     if "ADTM" not in df.columns:
         return []
@@ -178,7 +167,7 @@ def _check_adtm_iso8601(
                 _issue(
                     _SEVERITY_WARNING,
                     f"{domain}-005",
-                    f"ADTM value does not match ISO 8601 datetime format",
+                    "ADTM value does not match ISO 8601 datetime format",
                     row_index=int(str(i)),
                     column="ADTM",
                     value=val_str,

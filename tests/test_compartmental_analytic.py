@@ -20,10 +20,10 @@ from numpy.typing import NDArray
 from pkplugin.comp.analytic import predict
 from pkplugin.comp.models import get_model
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _trapz(t: list[float], c: NDArray[np.float64]) -> float:
     """Simple trapezoidal AUC (NumPy 2.0+: trapezoid replaces trapz)."""
@@ -33,6 +33,7 @@ def _trapz(t: list[float], c: NDArray[np.float64]) -> float:
 # ---------------------------------------------------------------------------
 # 1-cmt IV bolus  (WinNonlin #1)
 # ---------------------------------------------------------------------------
+
 
 class TestCmt1IvBolus:
     """1-cmt IV bolus: C(t) = (D/V)*exp(-k*t)."""
@@ -75,6 +76,7 @@ class TestCmt1IvBolus:
 # 1-cmt IV infusion  (WinNonlin #3)
 # ---------------------------------------------------------------------------
 
+
 class TestCmt1IvInfusion:
     """1-cmt IV infusion: rising during infusion, mono-exp decline after."""
 
@@ -83,10 +85,12 @@ class TestCmt1IvInfusion:
         D, V, k, T_inf = 100.0, 10.0, 0.2, 1.0
         params = {"V": V, "k": k}
         eps = 1e-8
-        c_before = predict("cmt1_iv_infusion", params, [T_inf - eps], dose=D,
-                           infusion_duration=T_inf)
-        c_after = predict("cmt1_iv_infusion", params, [T_inf + eps], dose=D,
-                          infusion_duration=T_inf)
+        c_before = predict(
+            "cmt1_iv_infusion", params, [T_inf - eps], dose=D, infusion_duration=T_inf
+        )
+        c_after = predict(
+            "cmt1_iv_infusion", params, [T_inf + eps], dose=D, infusion_duration=T_inf
+        )
         assert abs(c_before[0] - c_after[0]) < 1e-6
 
     def test_css_approached_at_long_infusion(self) -> None:
@@ -97,8 +101,9 @@ class TestCmt1IvInfusion:
         V, k = 20.0, 0.5
         params = {"V": V, "k": k}
         Css = D_rate / (V * k)
-        c_late = predict("cmt1_iv_infusion", params, [T_inf * 0.999], dose=D,
-                         infusion_duration=T_inf)
+        c_late = predict(
+            "cmt1_iv_infusion", params, [T_inf * 0.999], dose=D, infusion_duration=T_inf
+        )
         assert abs(c_late[0] - Css) / Css < 1e-3
 
     def test_post_infusion_mono_exponential_decay(self) -> None:
@@ -106,10 +111,8 @@ class TestCmt1IvInfusion:
         D, V, k, T_inf = 100.0, 10.0, 0.3, 2.0
         params = {"V": V, "k": k}
         t_post = [3.0, 5.0, 10.0]
-        c_Tinf = predict("cmt1_iv_infusion", params, [T_inf], dose=D,
-                         infusion_duration=T_inf)[0]
-        result = predict("cmt1_iv_infusion", params, t_post, dose=D,
-                         infusion_duration=T_inf)
+        c_Tinf = predict("cmt1_iv_infusion", params, [T_inf], dose=D, infusion_duration=T_inf)[0]
+        result = predict("cmt1_iv_infusion", params, t_post, dose=D, infusion_duration=T_inf)
         for i, t in enumerate(t_post):
             expected = c_Tinf * math.exp(-k * (t - T_inf))
             assert abs(result[i] - expected) < 1e-10
@@ -122,6 +125,7 @@ class TestCmt1IvInfusion:
 # ---------------------------------------------------------------------------
 # 1-cmt oral (Bateman)  (WinNonlin #5)
 # ---------------------------------------------------------------------------
+
 
 class TestCmt1Po:
     """1-cmt PO: Bateman equation with optional tlag."""
@@ -141,9 +145,7 @@ class TestCmt1Po:
         D, V_F, ka, k = 100.0, 20.0, 1.5, 0.3
         params = {"V_F": V_F, "ka": ka, "k": k}
         tmax = math.log(ka / k) / (ka - k)
-        cmax_exact = (D * ka / (V_F * (ka - k))) * (
-            math.exp(-k * tmax) - math.exp(-ka * tmax)
-        )
+        cmax_exact = (D * ka / (V_F * (ka - k))) * (math.exp(-k * tmax) - math.exp(-ka * tmax))
         t_fine = list(np.linspace(0.0, 30.0, 100_000))
         c_fine = predict("cmt1_po", params, t_fine, dose=D)
         cmax_numerical = float(np.max(c_fine))
@@ -177,9 +179,7 @@ class TestCmt1Po:
         result = predict("cmt1_po", params, times, dose=D)
         for i, t in enumerate(times):
             expected = (D * ka * t / V_F) * math.exp(-k * t)
-            assert abs(result[i] - expected) < 1e-10, (
-                f"t={t}: got {result[i]}, expected {expected}"
-            )
+            assert abs(result[i] - expected) < 1e-10, f"t={t}: got {result[i]}, expected {expected}"
 
     def test_tlag_zero_before_tlag(self) -> None:
         """C(t) == 0 for all t < tlag when tlag > 0."""
@@ -201,6 +201,7 @@ class TestCmt1Po:
 # ---------------------------------------------------------------------------
 # 2-cmt IV bolus  (WinNonlin #7)
 # ---------------------------------------------------------------------------
+
 
 class TestCmt2IvBolus:
     """2-cmt IV bolus: C(t) = A*exp(-α*t) + B*exp(-β*t)."""
@@ -266,6 +267,7 @@ class TestCmt2IvBolus:
 # 2-cmt oral  (WinNonlin #11)
 # ---------------------------------------------------------------------------
 
+
 class TestCmt2Po:
     """2-cmt oral: 3-exponential structure."""
 
@@ -309,6 +311,7 @@ class TestCmt2Po:
 # Error handling
 # ---------------------------------------------------------------------------
 
+
 class TestErrorHandling:
     """Validation and error cases."""
 
@@ -336,6 +339,7 @@ class TestErrorHandling:
 # ---------------------------------------------------------------------------
 # 3-cmt IV bolus  (WinNonlin #13)
 # ---------------------------------------------------------------------------
+
 
 class TestCmt3IvBolus:
     """3-cmt IV bolus: 3-exponential macro form."""

@@ -15,7 +15,6 @@ import tempfile
 from pathlib import Path
 
 import pandas as pd
-import pytest
 
 from pkplugin.mcp_server import impl_export_adam, impl_import_sdtm, impl_validate_cdisc
 
@@ -126,7 +125,6 @@ class TestImplImportSdtm:
 
 def _create_nca_run(tmpdir: str) -> str:
     """Create a minimal NCA parameters.csv in the audit dir and return run_id."""
-    from pkplugin.cdisc.adam import build_adpp
     from pkplugin.nca.engine import calculate_nca
     from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
@@ -146,19 +144,21 @@ def _create_nca_run(tmpdir: str) -> str:
     rows = []
     for r in results:
         for prow in r.parameter_rows:
-            rows.append({
-                "subject_id": prow.subject_id,
-                "period": prow.period,
-                "treatment": prow.treatment,
-                "analyte": prow.analyte,
-                "parameter": prow.parameter,
-                "value": prow.value,
-                "unit": prow.unit,
-                "method": prow.method,
-                "winnonlin_version": prow.winnonlin_version,
-                "flags": ";".join(prow.flags),
-                "comment": prow.comment,
-            })
+            rows.append(
+                {
+                    "subject_id": prow.subject_id,
+                    "period": prow.period,
+                    "treatment": prow.treatment,
+                    "analyte": prow.analyte,
+                    "parameter": prow.parameter,
+                    "value": prow.value,
+                    "unit": prow.unit,
+                    "method": prow.method,
+                    "winnonlin_version": prow.winnonlin_version,
+                    "flags": ";".join(prow.flags),
+                    "comment": prow.comment,
+                }
+            )
     pd.DataFrame(rows).to_csv(run_dir / "parameters.csv", index=False)
     return run_id
 
@@ -207,14 +207,18 @@ class TestImplExportAdam:
 
 class TestImplValidateCdisc:
     def _write_valid_adpp_csv(self, path: Path) -> None:
-        df = pd.DataFrame([{
-            "STUDYID": "STUDY01",
-            "USUBJID": "STUDY01-001-001",
-            "PARAMCD": "CMAX",
-            "AVAL": 24.3,
-            "AVALU": "ng/mL",
-            "PPCAT": "NON-COMPARTMENTAL",
-        }])
+        df = pd.DataFrame(
+            [
+                {
+                    "STUDYID": "STUDY01",
+                    "USUBJID": "STUDY01-001-001",
+                    "PARAMCD": "CMAX",
+                    "AVAL": 24.3,
+                    "AVALU": "ng/mL",
+                    "PPCAT": "NON-COMPARTMENTAL",
+                }
+            ]
+        )
         df.to_csv(path, index=False)
 
     def test_validate_adpp_valid_returns_ok(self) -> None:
@@ -228,14 +232,18 @@ class TestImplValidateCdisc:
     def test_validate_adpp_unknown_paramcd_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             csv_path = Path(tmpdir) / "adpp.csv"
-            df = pd.DataFrame([{
-                "STUDYID": "STUDY01",
-                "USUBJID": "STUDY01-001-001",
-                "PARAMCD": "XXXXXXINVALID",
-                "AVAL": 24.3,
-                "AVALU": "ng/mL",
-                "PPCAT": "NON-COMPARTMENTAL",
-            }])
+            df = pd.DataFrame(
+                [
+                    {
+                        "STUDYID": "STUDY01",
+                        "USUBJID": "STUDY01-001-001",
+                        "PARAMCD": "XXXXXXINVALID",
+                        "AVAL": 24.3,
+                        "AVALU": "ng/mL",
+                        "PPCAT": "NON-COMPARTMENTAL",
+                    }
+                ]
+            )
             df.to_csv(csv_path, index=False)
             result = impl_validate_cdisc(str(csv_path), "ADPP")
         assert result["n_errors"] >= 1

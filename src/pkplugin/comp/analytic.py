@@ -21,14 +21,13 @@ Refs:
 from __future__ import annotations
 
 import math
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import scipy.linalg  # type: ignore[import-untyped]
 from numpy.typing import NDArray
 
-from pkplugin.comp.models import REGISTRY, CompartmentRoute, PKModelSpec, get_model
-
+from pkplugin.comp.models import REGISTRY, PKModelSpec, get_model
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -139,8 +138,7 @@ def _validate_params(spec: PKModelSpec, params: dict[str, float]) -> None:
     for name in spec.parameter_names:
         if name not in params:
             raise ValueError(
-                f"Model {spec.name!r} requires parameter {name!r}, "
-                f"but it is missing from params."
+                f"Model {spec.name!r} requires parameter {name!r}, but it is missing from params."
             )
         val = params[name]
         if not (val > 0):
@@ -149,9 +147,7 @@ def _validate_params(spec: PKModelSpec, params: dict[str, float]) -> None:
             )
 
 
-def _require_infusion_duration(
-    model_name: str, infusion_duration: float | None
-) -> float:
+def _require_infusion_duration(model_name: str, infusion_duration: float | None) -> float:
     if infusion_duration is None or infusion_duration <= 0:
         raise ValueError(
             f"Model {model_name!r} requires a positive infusion_duration (T_inf); "
@@ -259,9 +255,9 @@ def _cmt1_po(
             #   = ka * τ * exp(-k*τ)
             result[valid] = (F * dose * ka * tau_v / V_F) * np.exp(-k * tau_v)
         else:
-            result[valid] = (
-                (F * dose * ka) / (V_F * (ka - k))
-            ) * (np.exp(-k * tau_v) - np.exp(-ka * tau_v))
+            result[valid] = ((F * dose * ka) / (V_F * (ka - k))) * (
+                np.exp(-k * tau_v) - np.exp(-ka * tau_v)
+            )
 
     return result
 
@@ -374,8 +370,10 @@ def _cmt2_iv_infusion(
     # = C_rising(t) - C_rising(t - T_inf) evaluated at the shifted times
     t_shift = t - T_inf
     post = R0 * (
-        (A_coeff / alpha) * (1.0 - np.exp(-alpha * t)) - (A_coeff / alpha) * (1.0 - np.exp(-alpha * t_shift))
-        + (B_coeff / beta) * (1.0 - np.exp(-beta * t)) - (B_coeff / beta) * (1.0 - np.exp(-beta * t_shift))
+        (A_coeff / alpha) * (1.0 - np.exp(-alpha * t))
+        - (A_coeff / alpha) * (1.0 - np.exp(-alpha * t_shift))
+        + (B_coeff / beta) * (1.0 - np.exp(-beta * t))
+        - (B_coeff / beta) * (1.0 - np.exp(-beta * t_shift))
     )
 
     # Equivalently simplified: post = A*exp(-alpha*(t-T_inf)) + B*exp(-beta*(t-T_inf))
@@ -445,7 +443,7 @@ def _cmt2_po(
 
     if ka_eq_alpha and ka_eq_beta:
         # Triple root: ka ≈ alpha ≈ beta — extremely rare; use l'Hôpital twice.
-        result[valid] = common * (tau_v ** 2 / 2.0) * np.exp(-ka * tau_v)
+        result[valid] = common * (tau_v**2 / 2.0) * np.exp(-ka * tau_v)
     elif ka_eq_alpha:
         # ka ≈ alpha; l'Hôpital for the ka/alpha pair.
         # C ≈ common/(alpha-beta) * tau * exp(-alpha*tau)
@@ -475,9 +473,7 @@ def _cmt2_po(
         A_amp = common / ((alpha - ka) * (alpha - beta))
         B_amp = common / ((beta - ka) * (beta - alpha))
         result[valid] = (
-            P * np.exp(-ka * tau_v)
-            + A_amp * np.exp(-alpha * tau_v)
-            + B_amp * np.exp(-beta * tau_v)
+            P * np.exp(-ka * tau_v) + A_amp * np.exp(-alpha * tau_v) + B_amp * np.exp(-beta * tau_v)
         )
 
     return result

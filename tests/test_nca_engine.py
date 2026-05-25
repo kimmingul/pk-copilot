@@ -25,7 +25,6 @@ import pytest
 from pkplugin.nca.engine import NCAResult, calculate_nca_subject
 from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -131,8 +130,7 @@ def test_engine_pure_iv_bolus() -> None:
     # AUClast: compute the expected linear-trapezoid value directly (not the
     # true integral — linear trapezoid overestimates a declining exponential).
     expected_auclast = sum(
-        0.5 * (concs[i] + concs[i + 1]) * (times[i + 1] - times[i])
-        for i in range(len(times) - 1)
+        0.5 * (concs[i] + concs[i + 1]) * (times[i + 1] - times[i]) for i in range(len(times) - 1)
     )
     assert _rel_err(_param(result, "AUClast"), expected_auclast) < 1e-9
 
@@ -203,9 +201,7 @@ def test_engine_oral_first_order() -> None:
     assert abs(tmax - tmax_anal) < 0.5  # sparse grid; nearest sample
 
     # AUClast ≈ integral from 0 to 24
-    analytic_auc24 = coeff * (
-        (1.0 - math.exp(-ke * 24.0)) / ke - (1.0 - math.exp(-ka * 24.0)) / ka
-    )
+    analytic_auc24 = coeff * ((1.0 - math.exp(-ke * 24.0)) / ke - (1.0 - math.exp(-ka * 24.0)) / ka)
     auclast = _param(result, "AUClast")
     assert auclast is not None
     assert abs(auclast - analytic_auc24) / analytic_auc24 < 0.02  # sparse grid ~1%
@@ -328,12 +324,16 @@ def test_engine_winnonlin_version_default() -> None:
     dose = _make_dose("S005", amount=D, route="iv_bolus")
 
     # WN 5.3
-    result_53 = calculate_nca_subject(recs, dose, NCAConfig(winnonlin_version="5.3", c0_method="observed"))
+    result_53 = calculate_nca_subject(
+        recs, dose, NCAConfig(winnonlin_version="5.3", c0_method="observed")
+    )
     auc_method_53 = result_53.auc_result.method
     assert auc_method_53 == "linear"
 
     # WN 6.4
-    result_64 = calculate_nca_subject(recs, dose, NCAConfig(winnonlin_version="6.4", c0_method="observed"))
+    result_64 = calculate_nca_subject(
+        recs, dose, NCAConfig(winnonlin_version="6.4", c0_method="observed")
+    )
     auc_method_64 = result_64.auc_result.method
     assert auc_method_64 == "linear_up_log_down"
 

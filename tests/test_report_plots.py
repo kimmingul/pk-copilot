@@ -15,12 +15,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+# Ensure Agg backend is used before any matplotlib import
+import matplotlib
 import numpy as np
 import pandas as pd
 import pytest
 
-# Ensure Agg backend is used before any matplotlib import
-import matplotlib
 matplotlib.use("Agg")
 
 from pkplugin.report.plots import (
@@ -32,7 +32,6 @@ from pkplugin.report.plots import (
     plot_residuals,
     plot_spaghetti,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared test data
@@ -130,8 +129,9 @@ def test_plot_mean_sd_group_by(tmp_path: Path) -> None:
     for sid in ["S1", "S2", "S3"]:
         trt = "T" if sid in ["S1", "S2"] else "R"
         for t, c in zip([0, 1, 2, 4, 8], [0, 5, 8, 4, 1]):
-            rows.append({"subject_id": sid, "time": float(t),
-                         "concentration": float(c), "treatment": trt})
+            rows.append(
+                {"subject_id": sid, "time": float(t), "concentration": float(c), "treatment": trt}
+            )
     df = pd.DataFrame(rows)
     out = tmp_path / "mean_sd_grp.png"
     result = plot_mean_sd(df, out, group_by="treatment")

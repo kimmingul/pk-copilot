@@ -28,11 +28,10 @@ import os
 import platform
 import socket
 import uuid
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # ---------------------------------------------------------------------------
 # HMAC key helpers
@@ -255,7 +254,7 @@ class AuditChain:
             self._key = load_or_create_hmac_key(self._dir)
 
     @classmethod
-    def open(cls, chain_dir: str | Path, hmac_key: bytes | None = None) -> "AuditChain":
+    def open(cls, chain_dir: str | Path, hmac_key: bytes | None = None) -> AuditChain:
         """Open (or create) an AuditChain at *chain_dir*."""
         return cls(chain_dir, hmac_key)
 
@@ -282,7 +281,7 @@ class AuditChain:
         prev_hash = prev.this_hash if prev is not None else _GENESIS_HASH
 
         event_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timestamp_utc = now.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
         workstation = socket.gethostname() + "/" + platform.system().lower()
 
@@ -381,8 +380,7 @@ class AuditChain:
             expected_this = _compute_this_hash_from_body(body_json)
             if data.get("this_hash") != expected_this:
                 violations.append(
-                    f"line {line_no} (event_id={entry_id}): "
-                    f"this_hash mismatch — entry tampered"
+                    f"line {line_no} (event_id={entry_id}): this_hash mismatch — entry tampered"
                 )
 
             # 3. Verify payload_sha256
@@ -401,10 +399,7 @@ class AuditChain:
             # 4. Verify HMAC
             expected_hmac = _compute_hmac(data.get("this_hash", ""), self._key)
             if data.get("hmac") != expected_hmac:
-                violations.append(
-                    f"line {line_no} (event_id={entry_id}): "
-                    f"HMAC verification failed"
-                )
+                violations.append(f"line {line_no} (event_id={entry_id}): HMAC verification failed")
 
             # Advance prev_hash for next iteration (use stored this_hash so the
             # chain walk continues; violations are already recorded above).

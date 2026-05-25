@@ -22,7 +22,6 @@ from pkplugin.comp.fitting import (
 )
 from pkplugin.comp.ode import DosingEvent
 
-
 # ---------------------------------------------------------------------------
 # Inline analytical generators (no dependency on analytic module)
 # ---------------------------------------------------------------------------
@@ -32,12 +31,8 @@ def _cmt1_iv(times: np.ndarray, dose: float, V: float, k: float) -> np.ndarray:
     return (dose / V) * np.exp(-k * times)
 
 
-def _bateman(
-    times: np.ndarray, dose: float, V_F: float, ka: float, k: float
-) -> np.ndarray:
-    return (dose * ka / (V_F * (ka - k))) * (
-        np.exp(-k * times) - np.exp(-ka * times)
-    )
+def _bateman(times: np.ndarray, dose: float, V_F: float, ka: float, k: float) -> np.ndarray:
+    return (dose * ka / (V_F * (ka - k))) * (np.exp(-k * times) - np.exp(-ka * times))
 
 
 def _cmt2_iv(
@@ -71,7 +66,9 @@ def test_fit_cmt1_iv_noiseless_recovery() -> None:
     obs = _cmt1_iv(times, dose, true_V, true_k)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=15.0, lower=1.0, upper=200.0),
             ParamSpec("k", initial=0.5, lower=1e-4, upper=10.0),
@@ -101,7 +98,9 @@ def test_fit_cmt1_iv_noisy_within_5pct() -> None:
     obs = np.clip(obs, 1e-6, None)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=15.0, lower=1.0, upper=200.0),
             ParamSpec("k", initial=0.5, lower=1e-4, upper=10.0),
@@ -128,11 +127,13 @@ def test_fit_cmt1_po_bateman_recovery() -> None:
     obs = _bateman(times, dose, true_V_F, true_ka, true_k)
 
     result = fit_pk_model(
-        times, obs, "cmt1_po",
+        times,
+        obs,
+        "cmt1_po",
         initial_params=[
             ParamSpec("V_F", initial=20.0, lower=1.0, upper=500.0),
-            ParamSpec("ka",  initial=1.0,  lower=0.01, upper=20.0),
-            ParamSpec("k",   initial=0.3,  lower=1e-4, upper=5.0),
+            ParamSpec("ka", initial=1.0, lower=0.01, upper=20.0),
+            ParamSpec("k", initial=0.3, lower=1e-4, upper=5.0),
         ],
         dose=dose,
         weighting="uniform",
@@ -141,8 +142,8 @@ def test_fit_cmt1_po_bateman_recovery() -> None:
 
     assert result.diagnostics.converged
     assert abs(result.parameters["V_F"] - true_V_F) / true_V_F < 0.01
-    assert abs(result.parameters["ka"]  - true_ka)  / true_ka  < 0.01
-    assert abs(result.parameters["k"]   - true_k)   / true_k   < 0.01
+    assert abs(result.parameters["ka"] - true_ka) / true_ka < 0.01
+    assert abs(result.parameters["k"] - true_k) / true_k < 0.01
 
 
 # ---------------------------------------------------------------------------
@@ -158,12 +159,14 @@ def test_fit_cmt2_iv_bolus_recovery() -> None:
     obs = _cmt2_iv(times, dose, **true)
 
     result = fit_pk_model(
-        times, obs, "cmt2_iv_bolus",
+        times,
+        obs,
+        "cmt2_iv_bolus",
         initial_params=[
-            ParamSpec("V1",  initial=8.0,  lower=0.1, upper=200.0),
-            ParamSpec("k10", initial=0.3,  lower=1e-4, upper=10.0),
-            ParamSpec("k12", initial=0.2,  lower=1e-4, upper=10.0),
-            ParamSpec("k21", initial=0.1,  lower=1e-4, upper=10.0),
+            ParamSpec("V1", initial=8.0, lower=0.1, upper=200.0),
+            ParamSpec("k10", initial=0.3, lower=1e-4, upper=10.0),
+            ParamSpec("k12", initial=0.2, lower=1e-4, upper=10.0),
+            ParamSpec("k21", initial=0.1, lower=1e-4, upper=10.0),
         ],
         dose=dose,
         weighting="uniform",
@@ -173,7 +176,9 @@ def test_fit_cmt2_iv_bolus_recovery() -> None:
     assert result.diagnostics.converged
     for p, true_val in true.items():
         rel_err = abs(result.parameters[p] - true_val) / true_val
-        assert rel_err < 0.01, f"{p}: {result.parameters[p]:.4f} vs truth {true_val} (rel {rel_err:.4f})"
+        assert rel_err < 0.01, (
+            f"{p}: {result.parameters[p]:.4f} vs truth {true_val} (rel {rel_err:.4f})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -181,13 +186,16 @@ def test_fit_cmt2_iv_bolus_recovery() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("scheme", [
-    "uniform",
-    "1_over_y",
-    "1_over_y_squared",
-    "1_over_pred",
-    "1_over_pred_squared",
-])
+@pytest.mark.parametrize(
+    "scheme",
+    [
+        "uniform",
+        "1_over_y",
+        "1_over_y_squared",
+        "1_over_pred",
+        "1_over_pred_squared",
+    ],
+)
 def test_weighting_schemes_noiseless_convergence(scheme: WeightScheme) -> None:
     """All weighting schemes should recover V and k accurately on noiseless data."""
     true_V, true_k, dose = 20.0, 0.3, 100.0
@@ -195,7 +203,9 @@ def test_weighting_schemes_noiseless_convergence(scheme: WeightScheme) -> None:
     obs = _cmt1_iv(times, dose, true_V, true_k)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=15.0, lower=1.0, upper=200.0),
             ParamSpec("k", initial=0.5, lower=1e-4, upper=10.0),
@@ -224,9 +234,7 @@ def test_1_over_y2_upweights_low_conc() -> None:
 
     w = _compute_weights("1_over_y_squared", y_obs, y_pred)
     # w[2] = 1/0.1² = 100 >> w[0] = 1/10² = 0.01
-    assert w[2] > w[1] > w[0], (
-        "1/y² weights must decrease as observed concentration increases"
-    )
+    assert w[2] > w[1] > w[0], "1/y² weights must decrease as observed concentration increases"
     np.testing.assert_allclose(w, np.array([0.01, 1.0, 100.0]), rtol=1e-9)
 
 
@@ -242,7 +250,9 @@ def test_aic_bic_hand_check() -> None:
     obs = _cmt1_iv(times, dose, true_V, true_k)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=18.0, lower=1.0, upper=200.0),
             ParamSpec("k", initial=0.4, lower=1e-4, upper=10.0),
@@ -278,7 +288,9 @@ def test_convergence_failure_no_exception() -> None:
 
     # Should not raise
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=10.0, lower=0.1, upper=1000.0),
             ParamSpec("k", initial=0.1, lower=1e-6, upper=100.0),
@@ -306,7 +318,9 @@ def test_parameter_at_bound_warning() -> None:
     obs = _cmt1_iv(times, dose, true_V, true_k)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=15.0, lower=1.0, upper=200.0),
             ParamSpec("k", initial=0.25, lower=1e-4, upper=0.29),  # true k=0.3 outside bound
@@ -318,9 +332,7 @@ def test_parameter_at_bound_warning() -> None:
 
     # k must be at or near 0.29 (its upper bound)
     at_bound_warnings = [w for w in result.warnings if "bound" in w.lower()]
-    assert len(at_bound_warnings) >= 1, (
-        f"Expected a bound warning; got warnings: {result.warnings}"
-    )
+    assert len(at_bound_warnings) >= 1, f"Expected a bound warning; got warnings: {result.warnings}"
 
 
 # ---------------------------------------------------------------------------
@@ -338,10 +350,12 @@ def test_standard_errors_finite_and_reasonable() -> None:
     obs = np.clip(obs, 1e-6, None)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params=[
             ParamSpec("V", initial=18.0, lower=1.0, upper=200.0),
-            ParamSpec("k", initial=0.4,  lower=1e-4, upper=5.0),
+            ParamSpec("k", initial=0.4, lower=1e-4, upper=5.0),
         ],
         dose=dose,
         weighting="1_over_y_squared",
@@ -370,7 +384,9 @@ def test_fit_result_structure() -> None:
     obs = _cmt1_iv(times, dose, 20.0, 0.3)
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params={"V": 15.0, "k": 0.4},
         dose=dose,
         use_ode=True,
@@ -402,7 +418,9 @@ def test_fit_via_dosing_events() -> None:
     ev = [DosingEvent(time=0.0, amount=dose, route="iv_bolus")]
 
     result = fit_pk_model(
-        times, obs, "cmt1_iv_bolus",
+        times,
+        obs,
+        "cmt1_iv_bolus",
         initial_params={"V": 15.0, "k": 0.4},
         dosing_events=ev,
         weighting="uniform",

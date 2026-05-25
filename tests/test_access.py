@@ -14,19 +14,18 @@ Tests:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from pkplugin.compliance.access import (
+    ROLE_PERMISSIONS,
     AccessDeniedError,
     Principal,
     Role,
-    ROLE_PERMISSIONS,
     check_permission,
     is_session_valid,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helper
@@ -35,9 +34,7 @@ from pkplugin.compliance.access import (
 
 def _make_principal(role: Role, expires_future: bool = True) -> Principal:
     if expires_future:
-        expiry = (datetime.now(timezone.utc) + timedelta(hours=1)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        )
+        expiry = (datetime.now(UTC) + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
     else:
         expiry = "2000-01-01T00:00:00Z"  # Past
     return Principal(
@@ -173,7 +170,7 @@ def test_role_permission_hierarchy() -> None:
         higher = ROLE_PERMISSIONS[roles[i + 1]]
         assert lower.issubset(higher), (
             f"{roles[i]} permissions {lower} should be subset of "
-            f"{roles[i+1]} permissions {higher}"
+            f"{roles[i + 1]} permissions {higher}"
         )
 
 
@@ -189,7 +186,7 @@ def test_session_valid_with_explicit_now() -> None:
         session_token="tok",
         session_expires_utc="2026-05-25T12:00:00Z",
     )
-    past = datetime(2026, 5, 25, 10, 0, 0, tzinfo=timezone.utc)
-    future = datetime(2026, 5, 25, 14, 0, 0, tzinfo=timezone.utc)
+    past = datetime(2026, 5, 25, 10, 0, 0, tzinfo=UTC)
+    future = datetime(2026, 5, 25, 14, 0, 0, tzinfo=UTC)
     assert is_session_valid(p, now=past)
     assert not is_session_valid(p, now=future)

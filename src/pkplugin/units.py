@@ -11,7 +11,7 @@ Refs:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field as dc_field
+from dataclasses import dataclass
 
 import pint
 
@@ -128,9 +128,7 @@ def to_canonical_time(value: float, unit: str) -> float:
     try:
         return float(qty.to(unit_registry.Unit(CANONICAL_TIME)).magnitude)
     except pint.DimensionalityError as exc:
-        raise ValueError(
-            f"Cannot convert {unit!r} to hours: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot convert {unit!r} to hours: {exc}") from exc
 
 
 def to_canonical_concentration(
@@ -192,9 +190,7 @@ def to_canonical_concentration(
     try:
         return float(qty.to(target).magnitude)
     except pint.DimensionalityError as exc:
-        raise ValueError(
-            f"Cannot convert {unit!r} to ng/mL: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot convert {unit!r} to ng/mL: {exc}") from exc
 
 
 def to_canonical_dose(
@@ -240,9 +236,7 @@ def to_canonical_dose(
     try:
         return float(qty.to(target).magnitude)
     except pint.DimensionalityError as exc:
-        raise ValueError(
-            f"Cannot convert {unit!r} to mg: {exc}"
-        ) from exc
+        raise ValueError(f"Cannot convert {unit!r} to mg: {exc}") from exc
 
 
 # ---------------------------------------------------------------------------

@@ -13,10 +13,7 @@ from __future__ import annotations
 import json
 import re
 
-import pytest
-
 from pkplugin.sbom import generate_sbom
-
 
 # ---------------------------------------------------------------------------
 # Test 1 — key packages present
@@ -29,7 +26,9 @@ def test_sbom_contains_key_packages() -> None:
     doc = json.loads(raw)
     names = {c["name"].lower() for c in doc["components"]}
     for required in ("pk-copilot", "numpy", "scipy", "pandas"):
-        assert required in names, f"Expected {required!r} in SBOM components; found: {sorted(names)}"
+        assert required in names, (
+            f"Expected {required!r} in SBOM components; found: {sorted(names)}"
+        )
 
 
 # ---------------------------------------------------------------------------

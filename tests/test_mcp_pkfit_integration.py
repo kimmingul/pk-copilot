@@ -17,14 +17,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from pkplugin.mcp_server import (
     impl_fit_pk_model,
     impl_list_pk_models,
     impl_simulate_pk_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -124,9 +122,7 @@ def test_impl_simulate_pk_model_matches_analytical() -> None:
     )
 
     for t, got, exp in zip(times, result["concentrations"], expected.tolist()):
-        assert abs(got - exp) < 1e-9, (
-            f"At t={t}: simulate returned {got}, analytic gives {exp}"
-        )
+        assert abs(got - exp) < 1e-9, f"At t={t}: simulate returned {got}, analytic gives {exp}"
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +136,7 @@ def test_impl_list_pk_models_count() -> None:
 
     assert result["status"] == "ok"
     assert "models" in result
-    assert result["n_models"] >= 7, (
-        f"Expected at least 7 models, got {result['n_models']}"
-    )
+    assert result["n_models"] >= 7, f"Expected at least 7 models, got {result['n_models']}"
 
     # Check each model entry has required fields
     for m in result["models"]:

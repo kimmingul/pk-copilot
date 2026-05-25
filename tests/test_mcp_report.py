@@ -12,10 +12,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
 import pandas as pd
 import pytest
 
-import matplotlib
 matplotlib.use("Agg")
 
 
@@ -31,13 +31,15 @@ def nca_run(tmp_path: Path) -> dict:
 
     times = [0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0]
     concs = [0.0, 4.0, 8.0, 6.0, 4.0, 2.5, 1.5, 0.5]
-    df = pd.DataFrame({
-        "subject_id": "S1",
-        "time": times,
-        "concentration": concs,
-        "analyte": "drug",
-        "dose": 100.0,
-    })
+    df = pd.DataFrame(
+        {
+            "subject_id": "S1",
+            "time": times,
+            "concentration": concs,
+            "analyte": "drug",
+            "dose": 100.0,
+        }
+    )
     csv_path = tmp_path / "conc.csv"
     df.to_csv(csv_path, index=False)
 
@@ -55,15 +57,28 @@ def be_run(tmp_path: Path) -> dict:
     """Run BE on a minimal CSV and return the result dict."""
     from pkplugin.mcp_server import impl_run_be
 
-    df = pd.DataFrame({
-        "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6",
-                        "S1", "S2", "S3", "S4", "S5", "S6"],
-        "period": ["1"] * 6 + ["2"] * 6,
-        "sequence": ["TR", "TR", "TR", "RT", "RT", "RT"] * 2,
-        "treatment": ["T", "T", "T", "R", "R", "R", "R", "R", "R", "T", "T", "T"],
-        "AUClast": [110.0, 105.0, 115.0, 100.0, 98.0, 102.0,
-                    95.0, 100.0, 105.0, 112.0, 108.0, 117.0],
-    })
+    df = pd.DataFrame(
+        {
+            "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6", "S1", "S2", "S3", "S4", "S5", "S6"],
+            "period": ["1"] * 6 + ["2"] * 6,
+            "sequence": ["TR", "TR", "TR", "RT", "RT", "RT"] * 2,
+            "treatment": ["T", "T", "T", "R", "R", "R", "R", "R", "R", "T", "T", "T"],
+            "AUClast": [
+                110.0,
+                105.0,
+                115.0,
+                100.0,
+                98.0,
+                102.0,
+                95.0,
+                100.0,
+                105.0,
+                112.0,
+                108.0,
+                117.0,
+            ],
+        }
+    )
     csv_path = tmp_path / "params.csv"
     df.to_csv(csv_path, index=False)
 

@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import math
 import warnings as _warnings
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Sequence
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -35,20 +36,20 @@ class DescriptiveSummary:
     Refs: docs/03-algorithms/01-nca-parameters.md §6, §7
     """
 
-    parameter: str             # e.g., "Cmax", "AUClast"
+    parameter: str  # e.g., "Cmax", "AUClast"
     unit: str
-    n: int                     # number of non-missing observations
-    n_missing: int             # NaN / None / non-finite values excluded
-    mean: float | None         # arithmetic mean
-    sd: float | None           # sample SD, ddof=1
-    cv_pct: float | None       # 100 · SD / mean (arithmetic CV%)
-    geo_mean: float | None     # exp(mean(ln x)); None if any value <= 0
-    geo_cv_pct: float | None   # 100 · sqrt(exp(var(ln x, ddof=1)) - 1)
+    n: int  # number of non-missing observations
+    n_missing: int  # NaN / None / non-finite values excluded
+    mean: float | None  # arithmetic mean
+    sd: float | None  # sample SD, ddof=1
+    cv_pct: float | None  # 100 · SD / mean (arithmetic CV%)
+    geo_mean: float | None  # exp(mean(ln x)); None if any value <= 0
+    geo_cv_pct: float | None  # 100 · sqrt(exp(var(ln x, ddof=1)) - 1)
     median: float | None
     min: float | None
     max: float | None
-    q1: float | None           # 25th percentile (linear interpolation)
-    q3: float | None           # 75th percentile (linear interpolation)
+    q1: float | None  # 25th percentile (linear interpolation)
+    q3: float | None  # 75th percentile (linear interpolation)
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ class GroupedStats:
     Refs: docs/03-algorithms/01-nca-parameters.md §7
     """
 
-    group_keys: dict[str, str]            # e.g. {"treatment": "Test", "period": "1"}
+    group_keys: dict[str, str]  # e.g. {"treatment": "Test", "period": "1"}
     n_subjects: int
     by_parameter: dict[str, DescriptiveSummary]
 
@@ -218,7 +219,7 @@ _UNSPECIFIED = "<unspecified>"
 
 
 def summarize_nca_results(
-    results: Sequence["NCAResult"],
+    results: Sequence[NCAResult],
     group_by: tuple[str, ...] = ("treatment", "period", "analyte"),
     parameters: tuple[str, ...] = DEFAULT_PARAMETERS,
 ) -> list[GroupedStats]:
@@ -256,7 +257,7 @@ def summarize_nca_results(
                 raise ValueError(f"Unknown group_by attribute: {attr!r}")
 
     # Build the set of all unique group-key tuples present in results
-    def _key_for(result: "NCAResult") -> tuple[str, ...]:
+    def _key_for(result: NCAResult) -> tuple[str, ...]:
         parts: list[str] = []
         for attr in group_by:
             val = getattr(result, attr, None)
@@ -307,9 +308,7 @@ def summarize_nca_results(
                     q3=None,
                 )
             else:
-                raw_values: list[float | None] = [
-                    r.parameters.get(param) for r in group_results
-                ]
+                raw_values: list[float | None] = [r.parameters.get(param) for r in group_results]
                 by_parameter[param] = summarize_values(raw_values, parameter=param, unit=unit)
 
         output.append(

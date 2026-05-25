@@ -50,9 +50,7 @@ def _load_records(
     dose_records: list[DoseRecord] = []
     for sid, sub in raw.groupby("subject_id"):
         dose = float(sub["dose"].iloc[0])
-        dose_records.append(
-            DoseRecord(subject_id=str(sid), time=0.0, amount=dose, route="oral")
-        )
+        dose_records.append(DoseRecord(subject_id=str(sid), time=0.0, amount=dose, route="oral"))
 
     return conc_records, dose_records
 
@@ -105,9 +103,7 @@ def test_theophylline_version_consistency() -> None:
     r64 = calculate_nca(conc_records, dose_records, NCAConfig(winnonlin_version="6.4"))
     r83 = calculate_nca(conc_records, dose_records, NCAConfig(winnonlin_version="8.3"))
 
-    assert len(r64) == len(r83), (
-        f"Subject count differs: v6.4={len(r64)}, v8.3={len(r83)}"
-    )
+    assert len(r64) == len(r83), f"Subject count differs: v6.4={len(r64)}, v8.3={len(r83)}"
 
     for a, b in zip(r64, r83):
         assert a.subject_id == b.subject_id, (

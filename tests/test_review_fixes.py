@@ -32,7 +32,6 @@ from pkplugin.nca.engine import NCAResult, calculate_nca_subject
 from pkplugin.nca.lambda_z import fit_lambda_z
 from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
-
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_nca_engine.py style)
 # ---------------------------------------------------------------------------
@@ -331,10 +330,14 @@ def test_lambda_z_excludes_nonpositive_post_tmax() -> None:
 
     # The zero at t=6 must be in excluded_points
     excluded_times = [ep["time"] for ep in result.excluded_points]
-    assert 6.0 in excluded_times, f"t=6 (c=0) should be excluded; got excluded_times={excluded_times}"
+    assert 6.0 in excluded_times, (
+        f"t=6 (c=0) should be excluded; got excluded_times={excluded_times}"
+    )
 
     # λz should still be estimable from the remaining positive points
-    assert result.lambda_z is not None, "lambda_z should be estimable from remaining positive points"
+    assert result.lambda_z is not None, (
+        "lambda_z should be estimable from remaining positive points"
+    )
 
 
 def test_lambda_z_excludes_negative_post_tmax() -> None:
@@ -478,9 +481,10 @@ def test_partial_auc_beyond_tlast_analytical() -> None:
         tlast=tlast,
     )
 
-    expected = clast_val / lambda_z_val * (
-        math.exp(-lambda_z_val * (t1 - tlast))
-        - math.exp(-lambda_z_val * (t2 - tlast))
+    expected = (
+        clast_val
+        / lambda_z_val
+        * (math.exp(-lambda_z_val * (t1 - tlast)) - math.exp(-lambda_z_val * (t2 - tlast)))
     )
     assert abs(result - expected) < 1e-9, f"Expected {expected}, got {result}"
 
@@ -517,12 +521,12 @@ def test_partial_auc_beyond_tlast_via_engine() -> None:
 def test_b14_load_dataset_converts_time_min_to_hour(tmp_path):
     """time_min column values should be divided by 60 (canonical hour)."""
     import pandas as pd  # noqa: F401
+
     from pkplugin.ingest import ColumnMapping, load_dataset
 
     p = tmp_path / "min.csv"
     p.write_text(
-        "subject_id,time_min,conc_ng_per_ml\n"
-        "S001,0,10\nS001,30,8.61\nS001,60,7.41\nS001,120,5.49\n"
+        "subject_id,time_min,conc_ng_per_ml\nS001,0,10\nS001,30,8.61\nS001,60,7.41\nS001,120,5.49\n"
     )
     df, rpt = load_dataset(
         p,
@@ -541,9 +545,7 @@ def test_b14_load_dataset_skips_molar_concentration(tmp_path):
     from pkplugin.ingest import ColumnMapping, load_dataset
 
     p = tmp_path / "molar.csv"
-    p.write_text(
-        "subject_id,time_hr,conc_nmol_L\nS001,0,100\nS001,1,80\n"
-    )
+    p.write_text("subject_id,time_hr,conc_nmol_L\nS001,0,100\nS001,1,80\n")
     df, rpt = load_dataset(
         p,
         column_mapping=ColumnMapping(
@@ -576,7 +578,6 @@ def test_aucmethod_linear_log_alias_works():
 
 def test_analytic_predict_rejects_mm_models():
     """analytic.predict refuses MM models with a clear ODE-routing hint."""
-    import pytest
     from pkplugin.comp.analytic import predict
 
     with pytest.raises(ValueError, match="Michaelis-Menten"):

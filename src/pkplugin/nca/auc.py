@@ -25,8 +25,9 @@ Refs:
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
 
@@ -73,9 +74,7 @@ class AUCResult:
     log_to_linear_fallbacks: list[int] = field(default_factory=list)
 
 
-def _linear_interval(
-    t1: float, t2: float, c1: float, c2: float
-) -> tuple[float, float]:
+def _linear_interval(t1: float, t2: float, c1: float, c2: float) -> tuple[float, float]:
     """Linear trapezoid AUC and exact AUMC under linear C interpolation.
 
     AUC uses the standard trapezoid rule.
@@ -91,15 +90,11 @@ def _linear_interval(
     """
     dt = t2 - t1
     d_auc = 0.5 * (c1 + c2) * dt
-    d_aumc = (dt / 6.0) * (
-        2.0 * t1 * c1 + t1 * c2 + t2 * c1 + 2.0 * t2 * c2
-    )
+    d_aumc = (dt / 6.0) * (2.0 * t1 * c1 + t1 * c2 + t2 * c1 + 2.0 * t2 * c2)
     return d_auc, d_aumc
 
 
-def _log_interval(
-    t1: float, t2: float, c1: float, c2: float
-) -> tuple[float, float]:
+def _log_interval(t1: float, t2: float, c1: float, c2: float) -> tuple[float, float]:
     """Log-linear trapezoid AUC and AUMC for a single interval.
 
     Caller must ensure ``c1 > 0``, ``c2 > 0``, and ``c1 != c2``.
@@ -112,10 +107,7 @@ def _log_interval(
     # AUMC for log-linear C interpolation. Sign on the second term is +,
     # not - (derived from ∫ t · C1·exp(-λ(t-t1)) dt and confirmed against
     # closed-form 1-cmt IV bolus AUMC_inf = D/(V·k²)).
-    d_aumc = (
-        dt * (t1 * c1 - t2 * c2) / ln_ratio
-        + dt * dt * (c1 - c2) / (ln_ratio * ln_ratio)
-    )
+    d_aumc = dt * (t1 * c1 - t2 * c2) / ln_ratio + dt * dt * (c1 - c2) / (ln_ratio * ln_ratio)
     return d_auc, d_aumc
 
 
@@ -157,13 +149,10 @@ def auc_trapezoid(
     n = len(t_arr)
     if len(c_arr) != n:
         raise ValueError(
-            f"times and concentrations must have the same length; "
-            f"got {n} and {len(c_arr)}."
+            f"times and concentrations must have the same length; got {n} and {len(c_arr)}."
         )
     if n < 2:
-        raise ValueError(
-            f"At least 2 data points are required; got {n}."
-        )
+        raise ValueError(f"At least 2 data points are required; got {n}.")
     if not np.all(np.diff(t_arr) > 0):
         raise ValueError("times must be strictly increasing.")
 
@@ -260,9 +249,7 @@ def auc_inf(
     """
     if variant == "pred":
         if clast_pred is None:
-            raise ValueError(
-                "clast_pred must be provided when variant='pred'."
-            )
+            raise ValueError("clast_pred must be provided when variant='pred'.")
         c_tail = clast_pred
     else:
         c_tail = clast
@@ -271,7 +258,7 @@ def auc_inf(
     auc_inf_value = auc_last + c_tail / lambda_z
 
     # AUMC_0-inf = AUMC_0-Tlast + Tlast * Clast / λz + Clast / λz²
-    aumc_inf_value = aumc_last + tlast * c_tail / lambda_z + c_tail / (lambda_z ** 2)
+    aumc_inf_value = aumc_last + tlast * c_tail / lambda_z + c_tail / (lambda_z**2)
 
     return auc_inf_value, aumc_inf_value
 
@@ -308,12 +295,7 @@ def _interpolate_concentration(
     """
     frac = (t_query - t_lo) / (t_hi - t_lo)
 
-    use_log = (
-        method in ("log", "linear_up_log_down")
-        and c_lo > 0
-        and c_hi > 0
-        and c_hi < c_lo
-    )
+    use_log = method in ("log", "linear_up_log_down") and c_lo > 0 and c_hi > 0 and c_hi < c_lo
 
     if use_log:
         ln_c = math.log(c_lo) + (math.log(c_hi) - math.log(c_lo)) * frac
@@ -389,8 +371,7 @@ def partial_auc(
     n = len(t_arr)
     if len(c_arr) != n:
         raise ValueError(
-            f"times and concentrations must have the same length; "
-            f"got {n} and {len(c_arr)}."
+            f"times and concentrations must have the same length; got {n} and {len(c_arr)}."
         )
     if n < 2:
         raise ValueError(f"At least 2 data points are required; got {n}.")
@@ -403,9 +384,13 @@ def partial_auc(
     # B13: If the entire window [t1, t2] lies beyond Tlast and lambda_z is
     # provided, return the analytical tail integral directly.
     if t1 >= effective_tlast and lambda_z is not None and clast is not None:
-        return clast / lambda_z * (
-            math.exp(-lambda_z * (t1 - effective_tlast))
-            - math.exp(-lambda_z * (t2 - effective_tlast))
+        return (
+            clast
+            / lambda_z
+            * (
+                math.exp(-lambda_z * (t1 - effective_tlast))
+                - math.exp(-lambda_z * (t2 - effective_tlast))
+            )
         )
 
     # Step 1: Build the augmented grid containing all original points plus
@@ -476,8 +461,6 @@ def partial_auc(
         tail_start = max(effective_tlast, t1)
         tail_end = t2
         if tail_end > tail_start:
-            result_auc += clast / lambda_z * (
-                1.0 - math.exp(-lambda_z * (tail_end - tail_start))
-            )
+            result_auc += clast / lambda_z * (1.0 - math.exp(-lambda_z * (tail_end - tail_start)))
 
     return result_auc

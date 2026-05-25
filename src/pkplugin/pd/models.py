@@ -17,7 +17,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Literal
 
 
 class PDModelType(str, Enum):
@@ -157,9 +156,7 @@ def get_pd_model(name: str) -> PDModelSpec:
     Refs: docs/03-algorithms/09-pkpd-models.md §1
     """
     if name not in PD_REGISTRY:
-        raise ValueError(
-            f"Unknown PD model: {name!r}. Available: {sorted(PD_REGISTRY)}"
-        )
+        raise ValueError(f"Unknown PD model: {name!r}. Available: {sorted(PD_REGISTRY)}")
     return PD_REGISTRY[name]
 
 

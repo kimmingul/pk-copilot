@@ -17,10 +17,10 @@ from dataclasses import dataclass
 class ParamCodeEntry:
     """One entry in the CDISC PK NCA PARAMCD registry."""
 
-    paramcd: str          # e.g. "AUCLST"
-    param: str            # e.g. "AUC From Time of First Dose to Time of Last Measurable Concentration"
-    unit: str             # standard ADaM unit, e.g. "ng.h/mL"
-    pkcopilot_name: str   # internal canonical name from nca/engine.py, e.g. "AUClast"
+    paramcd: str  # e.g. "AUCLST"
+    param: str  # e.g. "AUC From Time of First Dose to Time of Last Measurable Concentration"
+    unit: str  # standard ADaM unit, e.g. "ng.h/mL"
+    pkcopilot_name: str  # internal canonical name from nca/engine.py, e.g. "AUClast"
 
 
 # Full registry — required minimum per deliverable spec.
@@ -167,8 +167,7 @@ PARAMCD_REGISTRY: dict[str, ParamCodeEntry] = {
 
 # Reverse lookup: pkcopilot_name -> paramcd
 _PKCOPILOT_TO_PARAMCD: dict[str, str] = {
-    entry.pkcopilot_name: entry.paramcd
-    for entry in PARAMCD_REGISTRY.values()
+    entry.pkcopilot_name: entry.paramcd for entry in PARAMCD_REGISTRY.values()
 }
 
 

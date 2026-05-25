@@ -9,12 +9,11 @@ Refs: docs/08-validation-strategy.md §4–§5
 
 from __future__ import annotations
 
-import dataclasses
 import json
 import math
 import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +21,6 @@ import pandas as pd
 
 from pkplugin import __version__ as _PKPLUGIN_VERSION
 from pkplugin.validation.r_backend import RBackendStatus
-
 
 # ---------------------------------------------------------------------------
 # Per-parameter diff record
@@ -130,7 +128,9 @@ def compute_diff(
         sid = str(row["subject_id"])
         param = str(row["parameter"])
         raw = row.get("value")
-        val: float | None = None if (raw is None or (isinstance(raw, float) and math.isnan(raw))) else float(raw)
+        val: float | None = (
+            None if (raw is None or (isinstance(raw, float) and math.isnan(raw))) else float(raw)
+        )
         pk_map[(sid, param)] = val
 
     ref_map: dict[tuple[str, str], float | None] = {}
@@ -266,7 +266,7 @@ def write_validation_diff_json(diff: ValidationDiff, output_path: Path) -> Path:
 
     payload: dict[str, Any] = {
         "run_id": diff.run_id,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "pkplugin_version": diff.pkplugin_version,
         "reference_backend": diff.reference_backend,
         "n_compared": diff.n_compared,

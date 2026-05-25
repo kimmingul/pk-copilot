@@ -24,11 +24,11 @@ from pathlib import Path
 import pytest
 
 from pkplugin.compliance.audit_chain import (
-    AuditChain,
     _GENESIS_HASH,
+    AuditChain,
+    default_hmac_key_path,
     derive_hmac_key,
     load_or_create_hmac_key,
-    default_hmac_key_path,
 )
 
 _USER = {"id": "analyst@example.com", "auth_method": "password"}
@@ -89,7 +89,7 @@ def test_tamper_single_byte(tmp_path: Path) -> None:
     content = chain_file.read_text(encoding="utf-8")
     # Flip a character in the middle of the file
     mid = len(content) // 2
-    tampered = content[:mid] + ("X" if content[mid] != "X" else "Y") + content[mid + 1:]
+    tampered = content[:mid] + ("X" if content[mid] != "X" else "Y") + content[mid + 1 :]
     chain_file.write_text(tampered, encoding="utf-8")
 
     ok, violations = chain.verify()
@@ -351,9 +351,10 @@ def test_hmac_key_warning_on_default_location(
     """Creating a key at the default (co-located) location emits UserWarning."""
     monkeypatch.delenv("PKPLUGIN_CHAIN_KEY_PATH", raising=False)
     import warnings
+
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         load_or_create_hmac_key(tmp_path)
-    assert any(
-        "PKPLUGIN_CHAIN_KEY_PATH" in str(warning.message) for warning in w
-    ), "Expected warning about co-located key file"
+    assert any("PKPLUGIN_CHAIN_KEY_PATH" in str(warning.message) for warning in w), (
+        "Expected warning about co-located key file"
+    )

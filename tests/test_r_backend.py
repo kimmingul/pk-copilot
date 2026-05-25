@@ -14,7 +14,6 @@ Tests:
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -22,12 +21,10 @@ import pytest
 
 from pkplugin.validation.r_backend import (
     RBackendStatus,
-    RNCAResult,
     check_r_backend,
     run_r_noncompart,
     run_r_pknca,
 )
-
 
 # ---------------------------------------------------------------------------
 # 1. check_r_backend() always returns a populated status
@@ -67,11 +64,7 @@ def test_check_r_backend_no_rscript() -> None:
 
 def test_check_r_backend_mocked_success() -> None:
     """When subprocess returns R + both packages, status.available is True."""
-    mock_stdout = (
-        "R_VERSION=4.3.1\n"
-        "PKNCA=0.11.0\n"
-        "NONCOMPART=0.6.0\n"
-    )
+    mock_stdout = "R_VERSION=4.3.1\nPKNCA=0.11.0\nNONCOMPART=0.6.0\n"
     mock_proc = MagicMock()
     mock_proc.returncode = 0
     mock_proc.stdout = mock_stdout
@@ -98,11 +91,7 @@ def test_check_r_backend_mocked_success() -> None:
 
 def test_check_r_backend_pknca_missing() -> None:
     """When PKNCA is MISSING, status.available is False."""
-    mock_stdout = (
-        "R_VERSION=4.3.1\n"
-        "PKNCA=MISSING\n"
-        "NONCOMPART=0.6.0\n"
-    )
+    mock_stdout = "R_VERSION=4.3.1\nPKNCA=MISSING\nNONCOMPART=0.6.0\n"
     mock_proc = MagicMock()
     mock_proc.returncode = 0
     mock_proc.stdout = mock_stdout

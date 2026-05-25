@@ -12,11 +12,9 @@ Tests:
 
 from __future__ import annotations
 
-import csv
 import json
-import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
@@ -26,7 +24,6 @@ from pkplugin.mcp_server import (
     impl_r_backend_status,
 )
 from pkplugin.validation.r_backend import RBackendStatus, RNCAResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers

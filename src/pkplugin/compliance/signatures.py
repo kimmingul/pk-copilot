@@ -26,14 +26,13 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
     Ed25519PrivateKey,
-    Ed25519PublicKey,
 )
 
 SignatureMeaning = Literal["authored", "reviewed", "approved", "rejected"]
@@ -45,8 +44,8 @@ _SIG_FILE = "signatures.jsonl"
 _SIG_EXCLUSIONS = {
     _SIG_FILE,
     "audit-chain.jsonl",  # grows as audit entries are appended
-    "chain.key",          # HMAC key — operational, not bundle content
-    "LOCKED.json",        # lock manifest written after signing
+    "chain.key",  # HMAC key — operational, not bundle content
+    "LOCKED.json",  # lock manifest written after signing
 }
 
 
@@ -147,6 +146,7 @@ def save_private_key(
     # Restrict private-key file to owner-only (Part 11 + best practice)
     try:
         import os
+
         os.chmod(path, 0o600)
     except OSError:
         pass
@@ -255,7 +255,7 @@ def sign_run(
     )
     public_key_hex = pub_raw.hex()
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     timestamp_utc = now.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
     sig = Signature(

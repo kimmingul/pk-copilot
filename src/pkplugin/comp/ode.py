@@ -36,8 +36,9 @@ Refs: docs/03-algorithms/08-compartmental-models.md §3
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Callable, Literal, Sequence, Union
+from typing import Literal, Union
 
 import numpy as np
 from numpy.typing import NDArray
@@ -87,7 +88,7 @@ def _make_rhs_cmt1_iv(
     C = A_c / V
     dA_c/dt = R_in(t) - k * A_c
     """
-    V = params["V"]
+    V = params["V"]  # noqa: F841
     k = params["k"]
 
     def rhs(t: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -118,10 +119,12 @@ def _make_rhs_cmt1_po(
 
     def rhs(t: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
         a_dep, a_c = y[0], y[1]
-        return np.array([
-            -ka * a_dep,
-            ka * a_dep - k * a_c,
-        ])
+        return np.array(
+            [
+                -ka * a_dep,
+                ka * a_dep - k * a_c,
+            ]
+        )
 
     return rhs
 
@@ -168,11 +171,13 @@ def _make_rhs_cmt2_po(
 
     def rhs(t: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
         a_dep, a1, a2 = y[0], y[1], y[2]
-        return np.array([
-            -ka * a_dep,
-            ka * a_dep - k10 * a1 - k12 * a1 + k21 * a2,
-            k12 * a1 - k21 * a2,
-        ])
+        return np.array(
+            [
+                -ka * a_dep,
+                ka * a_dep - k10 * a1 - k12 * a1 + k21 * a2,
+                k12 * a1 - k21 * a2,
+            ]
+        )
 
     return rhs
 
@@ -227,7 +232,7 @@ def _make_rhs_cmt1_iv_mm(
       At C >> Km: apparent elimination ≈ Vmax * V = 1000 ng/hr per mL * 10 L
       At C << Km: apparent k_eff = Vmax/Km = 20 hr⁻¹ → fast linear decay.
     """
-    V = params["V"]
+    V = params["V"]  # noqa: F841
     vmax = params["Vmax"]
     km = params["Km"]
 
@@ -298,10 +303,12 @@ def _make_rhs_cmt1_po_mm(
         a_dep, a_c = y[0], y[1]
         c = a_c / V_F
         elim = vmax * c / (km + c) * V_F
-        return np.array([
-            -ka * a_dep,
-            ka * a_dep - elim,
-        ])
+        return np.array(
+            [
+                -ka * a_dep,
+                ka * a_dep - elim,
+            ]
+        )
 
     return rhs
 
@@ -314,26 +321,26 @@ def _make_rhs_cmt1_po_mm(
 _MODEL_META: dict[
     str,
     tuple[
-        int,   # n_states
-        int,   # index of central compartment in state vector
+        int,  # n_states
+        int,  # index of central compartment in state vector
         int | None,  # index of depot (oral) compartment, or None
-        str,   # name of volume parameter (V, V1, V_F, V1_F)
+        str,  # name of volume parameter (V, V1, V_F, V1_F)
         Callable[
             [dict[str, float], list[tuple[float, float, float]]],
             _RHS,
         ],
     ],
 ] = {
-    "cmt1_iv_bolus":     (1, 0, None, "V",    _make_rhs_cmt1_iv),
-    "cmt1_iv_infusion":  (1, 0, None, "V",    _make_rhs_cmt1_iv),
-    "cmt1_po":           (2, 1, 0,    "V_F",  _make_rhs_cmt1_po),
-    "cmt2_iv_bolus":     (2, 0, None, "V1",   _make_rhs_cmt2_iv),
-    "cmt2_iv_infusion":  (2, 0, None, "V1",   _make_rhs_cmt2_iv),
-    "cmt2_po":           (3, 1, 0,    "V1_F", _make_rhs_cmt2_po),
-    "cmt3_iv_bolus":     (3, 0, None, "V1",   _make_rhs_cmt3_iv),
-    "cmt1_iv_mm":        (1, 0, None, "V",    _make_rhs_cmt1_iv_mm),
-    "cmt2_iv_mm":        (2, 0, None, "V1",   _make_rhs_cmt2_iv_mm),
-    "cmt1_po_mm":        (2, 1, 0,    "V_F",  _make_rhs_cmt1_po_mm),
+    "cmt1_iv_bolus": (1, 0, None, "V", _make_rhs_cmt1_iv),
+    "cmt1_iv_infusion": (1, 0, None, "V", _make_rhs_cmt1_iv),
+    "cmt1_po": (2, 1, 0, "V_F", _make_rhs_cmt1_po),
+    "cmt2_iv_bolus": (2, 0, None, "V1", _make_rhs_cmt2_iv),
+    "cmt2_iv_infusion": (2, 0, None, "V1", _make_rhs_cmt2_iv),
+    "cmt2_po": (3, 1, 0, "V1_F", _make_rhs_cmt2_po),
+    "cmt3_iv_bolus": (3, 0, None, "V1", _make_rhs_cmt3_iv),
+    "cmt1_iv_mm": (1, 0, None, "V", _make_rhs_cmt1_iv_mm),
+    "cmt2_iv_mm": (2, 0, None, "V1", _make_rhs_cmt2_iv_mm),
+    "cmt1_po_mm": (2, 1, 0, "V_F", _make_rhs_cmt1_po_mm),
 }
 
 
@@ -345,16 +352,16 @@ _MODEL_META: dict[
 #: in the ``params`` dict passed to :func:`simulate_ode`.  Raises
 #: :exc:`ValueError` when any required key is missing.
 MODEL_REQUIRED_PARAMS: dict[str, frozenset[str]] = {
-    "cmt1_iv_bolus":    frozenset({"V", "k"}),
+    "cmt1_iv_bolus": frozenset({"V", "k"}),
     "cmt1_iv_infusion": frozenset({"V", "k"}),
-    "cmt1_po":          frozenset({"V_F", "ka", "k"}),
-    "cmt2_iv_bolus":    frozenset({"V1", "k10", "k12", "k21"}),
+    "cmt1_po": frozenset({"V_F", "ka", "k"}),
+    "cmt2_iv_bolus": frozenset({"V1", "k10", "k12", "k21"}),
     "cmt2_iv_infusion": frozenset({"V1", "k10", "k12", "k21"}),
-    "cmt2_po":          frozenset({"V1_F", "ka", "k10", "k12", "k21"}),
-    "cmt3_iv_bolus":    frozenset({"V1", "k10", "k12", "k21", "k13", "k31"}),
-    "cmt1_iv_mm":       frozenset({"V", "Vmax", "Km"}),
-    "cmt2_iv_mm":       frozenset({"V1", "Vmax", "Km", "k12", "k21"}),
-    "cmt1_po_mm":       frozenset({"V_F", "ka", "Vmax", "Km"}),
+    "cmt2_po": frozenset({"V1_F", "ka", "k10", "k12", "k21"}),
+    "cmt3_iv_bolus": frozenset({"V1", "k10", "k12", "k21", "k13", "k31"}),
+    "cmt1_iv_mm": frozenset({"V", "Vmax", "Km"}),
+    "cmt2_iv_mm": frozenset({"V1", "Vmax", "Km", "k12", "k21"}),
+    "cmt1_po_mm": frozenset({"V_F", "ka", "Vmax", "Km"}),
 }
 
 
@@ -395,18 +402,13 @@ def simulate_ode(
     Refs: docs/03-algorithms/08-compartmental-models.md §3
     """
     if model_name not in _MODEL_META:
-        raise ValueError(
-            f"Unknown ODE model: {model_name!r}. "
-            f"Supported: {sorted(_MODEL_META)}"
-        )
+        raise ValueError(f"Unknown ODE model: {model_name!r}. Supported: {sorted(_MODEL_META)}")
 
     # H3: Validate required parameters — no silent fallbacks
     required = MODEL_REQUIRED_PARAMS.get(model_name, frozenset())
     missing = required - set(params)
     if missing:
-        raise ValueError(
-            f"Missing required parameters for {model_name!r}: {sorted(missing)}"
-        )
+        raise ValueError(f"Missing required parameters for {model_name!r}: {sorted(missing)}")
 
     n_states, central_idx, depot_idx, vol_param, rhs_factory = _MODEL_META[model_name]
 
@@ -424,9 +426,7 @@ def simulate_ode(
         if ev.route == "iv_infusion":
             dur = ev.infusion_duration
             if dur is None or dur <= 0.0:
-                raise ValueError(
-                    f"iv_infusion event at t={ev.time} requires infusion_duration > 0"
-                )
+                raise ValueError(f"iv_infusion event at t={ev.time} requires infusion_duration > 0")
             rate = ev.amount / dur
             infusion_windows.append((ev.time, ev.time + dur, rate))
 
@@ -503,9 +503,7 @@ def simulate_ode(
             _record_obs(t_start, state)
 
         # Observation times strictly inside this segment (t_start < t <= t_end)
-        seg_obs = sorted(
-            t for t in obs_idx if t_start < t <= t_end + 1e-14
-        )
+        seg_obs = sorted(t for t in obs_idx if t_start < t <= t_end + 1e-14)
         # We always evaluate at t_end; add segment obs
         t_eval_set = set(seg_obs)
         t_eval_set.add(t_end)
@@ -528,9 +526,7 @@ def simulate_ode(
         )
 
         if not sol.success:
-            raise RuntimeError(
-                f"ODE solver failed in segment [{t_start}, {t_end}]: {sol.message}"
-            )
+            raise RuntimeError(f"ODE solver failed in segment [{t_start}, {t_end}]: {sol.message}")
 
         # Record observations from this segment (only those not yet written
         # at t_start by the post-dose step above)
@@ -583,8 +579,13 @@ def simulate_ode_with_tlag(
     obs_times = np.asarray(times, dtype=np.float64)
     if tlag <= 0.0:
         return simulate_ode(
-            model_name, params, dosing, times,
-            method=method, rtol=rtol, atol=atol,
+            model_name,
+            params,
+            dosing,
+            times,
+            method=method,
+            rtol=rtol,
+            atol=atol,
         )
 
     # Shift oral doses
@@ -603,8 +604,13 @@ def simulate_ode_with_tlag(
             shifted.append(ev)
 
     conc = simulate_ode(
-        model_name, params, shifted, times,
-        method=method, rtol=rtol, atol=atol,
+        model_name,
+        params,
+        shifted,
+        times,
+        method=method,
+        rtol=rtol,
+        atol=atol,
     )
 
     # Zero out observations before the first shifted oral dose

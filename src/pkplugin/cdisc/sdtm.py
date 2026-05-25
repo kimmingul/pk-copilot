@@ -12,7 +12,7 @@ Refs:
 from __future__ import annotations
 
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -120,15 +120,17 @@ def _parse_datetime(dtc: str) -> datetime:
     if len(dtc) == 10:
         # date-only: assume midnight UTC
         return datetime(
-            int(dtc[0:4]), int(dtc[5:7]), int(dtc[8:10]),
-            tzinfo=timezone.utc,
+            int(dtc[0:4]),
+            int(dtc[5:7]),
+            int(dtc[8:10]),
+            tzinfo=UTC,
         )
     try:
         dt = datetime.fromisoformat(dtc)
     except ValueError:
-        raise ValueError(f"Cannot parse datetime: {dtc!r}")
+        raise ValueError(f"Cannot parse datetime: {dtc!r}") from None
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     return dt
 
 
@@ -161,7 +163,9 @@ def _compute_elapsed_with_pceltm(
     Returns:
         (elapsed_hours, used_pceltm)
     """
-    pceltm_str = str(pceltm).strip() if pceltm is not None and str(pceltm).strip() not in ("", "nan") else ""
+    pceltm_str = (
+        str(pceltm).strip() if pceltm is not None and str(pceltm).strip() not in ("", "nan") else ""
+    )
     if pceltm_str.startswith("P"):
         hours = _parse_iso8601_duration_hours(pceltm_str)
         if hours is not None:
@@ -190,13 +194,13 @@ def _load_domain(path: str | Path) -> pd.DataFrame:
     elif ext in (".xpt", ".sas7bdat"):
         try:
             import pyreadstat
+
             raw_df, _ = pyreadstat.read_xport(str(p))
             df = raw_df.astype(str)
-        except ImportError:
+        except ImportError as exc:
             raise ImportError(
-                "pyreadstat is required to read SAS XPT files. "
-                "Install with: pip install pyreadstat"
-            )
+                "pyreadstat is required to read SAS XPT files. Install with: pip install pyreadstat"
+            ) from exc
     else:
         raise ValueError(f"Unsupported SDTM format: {ext!r}. Expected .csv or .xpt")
     df.columns = pd.Index([str(c).strip().upper() for c in df.columns])
@@ -259,9 +263,18 @@ def load_sdtm_pc(
     if df.empty:
         empty: pd.DataFrame = pd.DataFrame(
             columns=[
-                "subject_id", "time", "concentration", "analyte", "matrix",
-                "bloq", "raw_concentration", "studyid", "pctpt", "pctptnum",
-                "pcdtc", "pcstresu",
+                "subject_id",
+                "time",
+                "concentration",
+                "analyte",
+                "matrix",
+                "bloq",
+                "raw_concentration",
+                "studyid",
+                "pctpt",
+                "pctptnum",
+                "pcdtc",
+                "pcstresu",
             ]
         )
         return empty, warnings
@@ -276,7 +289,11 @@ def load_sdtm_pc(
 
         # Determine time
         time_val: float | None = None
-        pceltm_str = str(pceltm_raw).strip() if pceltm_raw is not None and str(pceltm_raw).strip() not in ("", "nan") else ""
+        pceltm_str = (
+            str(pceltm_raw).strip()
+            if pceltm_raw is not None and str(pceltm_raw).strip() not in ("", "nan")
+            else ""
+        )
 
         if pceltm_str.startswith("P"):
             parsed_hours = _parse_iso8601_duration_hours(pceltm_str)
@@ -305,7 +322,11 @@ def load_sdtm_pc(
         # Concentration
         pcstresn = row.get("PCSTRESN", "")
         try:
-            conc_val: float | None = float(str(pcstresn).strip()) if str(pcstresn).strip() not in ("", "nan", "NaN") else None
+            conc_val: float | None = (
+                float(str(pcstresn).strip())
+                if str(pcstresn).strip() not in ("", "nan", "NaN")
+                else None
+            )
         except (ValueError, TypeError):
             conc_val = None
 
@@ -328,25 +349,27 @@ def load_sdtm_pc(
         }
         matrix = matrix_map.get(pcspec, "other")
 
-        rows.append({
-            "subject_id": subject_id,
-            "time": time_val,       # None when PCELTM absent; normalise via EX
-            "concentration": conc_val,
-            "analyte": str(row.get("PCTESTCD", "UNKNOWN")).strip(),
-            "matrix": matrix,
-            "bloq": is_bloq,
-            "raw_concentration": pcorres if pcorres else None,
-            "studyid": str(row.get("STUDYID", "")).strip(),
-            "pctpt": str(row.get("PCTPT", "")).strip() if "PCTPT" in df.columns else None,
-            "pctptnum": (
-                float(str(row.get("PCTPTNUM", "")).strip())
-                if "PCTPTNUM" in df.columns
-                and str(row.get("PCTPTNUM", "")).strip() not in ("", "nan")
-                else None
-            ),
-            "pcdtc": pcdtc,
-            "pcstresu": str(row.get("PCSTRESU", "")).strip(),
-        })
+        rows.append(
+            {
+                "subject_id": subject_id,
+                "time": time_val,  # None when PCELTM absent; normalise via EX
+                "concentration": conc_val,
+                "analyte": str(row.get("PCTESTCD", "UNKNOWN")).strip(),
+                "matrix": matrix,
+                "bloq": is_bloq,
+                "raw_concentration": pcorres if pcorres else None,
+                "studyid": str(row.get("STUDYID", "")).strip(),
+                "pctpt": str(row.get("PCTPT", "")).strip() if "PCTPT" in df.columns else None,
+                "pctptnum": (
+                    float(str(row.get("PCTPTNUM", "")).strip())
+                    if "PCTPTNUM" in df.columns
+                    and str(row.get("PCTPTNUM", "")).strip() not in ("", "nan")
+                    else None
+                ),
+                "pcdtc": pcdtc,
+                "pcstresu": str(row.get("PCSTRESU", "")).strip(),
+            }
+        )
 
     out_df = pd.DataFrame(rows)
     return out_df, warnings
@@ -379,7 +402,9 @@ def normalise_pc_times(
 
     result = pc_df.copy()
     for i, row in result.iterrows():
-        if row["time"] is not None and not (isinstance(row["time"], float) and pd.isna(row["time"])):
+        if row["time"] is not None and not (
+            isinstance(row["time"], float) and pd.isna(row["time"])
+        ):
             continue
         sid = str(row["subject_id"])
         pcdtc = str(row.get("pcdtc", "")).strip()
@@ -457,17 +482,19 @@ def load_sdtm_ex(
             except ValueError:
                 pass
 
-        rows.append({
-            "subject_id": subject_id,
-            "time": 0.0,            # First dose assumed at t=0 for NCA
-            "amount": dose_amount,
-            "route": canonical_route,
-            "infusion_duration": infusion_duration,
-            "treatment": str(row.get("EXTRT", "")).strip(),
-            "studyid": str(row.get("STUDYID", "")).strip(),
-            "exstdtc": exstdtc,
-            "exdosu": str(row.get("EXDOSU", "")).strip(),
-        })
+        rows.append(
+            {
+                "subject_id": subject_id,
+                "time": 0.0,  # First dose assumed at t=0 for NCA
+                "amount": dose_amount,
+                "route": canonical_route,
+                "infusion_duration": infusion_duration,
+                "treatment": str(row.get("EXTRT", "")).strip(),
+                "studyid": str(row.get("STUDYID", "")).strip(),
+                "exstdtc": exstdtc,
+                "exdosu": str(row.get("EXDOSU", "")).strip(),
+            }
+        )
 
     if unrecognised_routes:
         unique_routes = sorted(set(unrecognised_routes))
@@ -515,18 +542,20 @@ def load_sdtm_dm(path: str | Path) -> pd.DataFrame:
         sex_raw = (_get(row, "SEX") or "").upper()
         sex = sex_raw if sex_raw in ("M", "F") else "U"
 
-        rows.append({
-            "subject_id": str(row.get("USUBJID", "")).strip(),
-            "age": age,
-            "ageu": _get(row, "AGEU") or "YEARS",
-            "sex": sex,
-            "race": _get(row, "RACE"),
-            "arm": _get(row, "ARM"),
-            "armcd": _get(row, "ARMCD"),
-            "actarm": _get(row, "ACTARM"),
-            "country": _get(row, "COUNTRY"),
-            "rfstdtc": _get(row, "RFSTDTC"),
-            "studyid": _get(row, "STUDYID"),
-        })
+        rows.append(
+            {
+                "subject_id": str(row.get("USUBJID", "")).strip(),
+                "age": age,
+                "ageu": _get(row, "AGEU") or "YEARS",
+                "sex": sex,
+                "race": _get(row, "RACE"),
+                "arm": _get(row, "ARM"),
+                "armcd": _get(row, "ARMCD"),
+                "actarm": _get(row, "ACTARM"),
+                "country": _get(row, "COUNTRY"),
+                "rfstdtc": _get(row, "RFSTDTC"),
+                "studyid": _get(row, "STUDYID"),
+            }
+        )
 
     return pd.DataFrame(rows)

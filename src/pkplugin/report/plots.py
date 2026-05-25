@@ -10,12 +10,12 @@ Refs: docs/02-roadmap.md v0.5
 from __future__ import annotations
 
 import matplotlib
+
 matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
+import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np
 from numpy.typing import NDArray
 
@@ -32,7 +32,7 @@ def _resolve_path(output_path: str | Path) -> Path:
     return Path(output_path).resolve()
 
 
-def _apply_log_scale(ax: "matplotlib.axes.Axes", log_scale: bool) -> None:
+def _apply_log_scale(ax: matplotlib.axes.Axes, log_scale: bool) -> None:
     if log_scale:
         ax.set_yscale("log")
 
@@ -59,14 +59,21 @@ def plot_concentration_time(
     _apply_log_scale(ax, log_scale)
     ax.set_xlabel("Time (h)")
     ax.set_ylabel("Concentration (ng/mL)")
-    display_title = title or (f"Subject {subject_id}" if subject_id else "Concentration-Time Profile")
+    display_title = title or (
+        f"Subject {subject_id}" if subject_id else "Concentration-Time Profile"
+    )
     ax.set_title(display_title)
     ax.grid(True, alpha=0.3)
     if subject_id:
         ax.text(
-            0.98, 0.98, f"Subject: {subject_id}",
+            0.98,
+            0.98,
+            f"Subject: {subject_id}",
             transform=ax.transAxes,
-            ha="right", va="top", fontsize=8, color="gray",
+            ha="right",
+            va="top",
+            fontsize=8,
+            color="gray",
         )
     fig.tight_layout()
     fig.savefig(out, dpi=120)
@@ -80,7 +87,7 @@ def plot_concentration_time(
 
 
 def plot_spaghetti(
-    df_long: "pd.DataFrame",
+    df_long: pd.DataFrame,
     output_path: str | Path,
     *,
     log_scale: bool = False,
@@ -127,7 +134,7 @@ def plot_spaghetti(
 
 
 def plot_mean_sd(
-    df_long: "pd.DataFrame",
+    df_long: pd.DataFrame,
     output_path: str | Path,
     *,
     log_scale: bool = False,
@@ -153,16 +160,19 @@ def plot_mean_sd(
                 label = "All"
 
             color = cmap(i % 10)
-            agg = (
-                sub.groupby("time")["concentration"]
-                .agg(["mean", "std"])
-                .reset_index()
-            )
+            agg = sub.groupby("time")["concentration"].agg(["mean", "std"]).reset_index()
             agg.columns = ["time", "mean", "sd"]
             agg["sd"] = agg["sd"].fillna(0.0)
 
-            ax.plot(agg["time"], agg["mean"], marker="o", linewidth=1.5,
-                    markersize=5, color=color, label=label)
+            ax.plot(
+                agg["time"],
+                agg["mean"],
+                marker="o",
+                linewidth=1.5,
+                markersize=5,
+                color=color,
+                label=label,
+            )
             ax.fill_between(
                 agg["time"],
                 agg["mean"] - agg["sd"],
@@ -362,7 +372,10 @@ def plot_hysteresis(
     ax.scatter(concentrations[-1], effects[-1], color="red", s=60, zorder=10, label="End")
 
     import matplotlib.colors as _mcolors
-    sm = plt.cm.ScalarMappable(cmap="viridis", norm=_mcolors.Normalize(vmin=times.min(), vmax=times.max()))
+
+    sm = plt.cm.ScalarMappable(
+        cmap="viridis", norm=_mcolors.Normalize(vmin=times.min(), vmax=times.max())
+    )
     sm.set_array([])
     fig.colorbar(sm, ax=ax, label="Time (h)")
 

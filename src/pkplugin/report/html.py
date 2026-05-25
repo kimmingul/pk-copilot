@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import base64
 import datetime
+from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from pkplugin.nca.engine import NCAResult
     from pkplugin.nca.bioequivalence import BEResult
+    from pkplugin.nca.engine import NCAResult
 
 from pkplugin import __version__ as _PKPLUGIN_VERSION
 
@@ -101,7 +102,7 @@ def _embed_image(path: str) -> str:
     """Return an HTML <img> tag with the image embedded as base64."""
     p = Path(path)
     if not p.is_file():
-        return f'<p><em>Image not found: {path}</em></p>'
+        return f"<p><em>Image not found: {path}</em></p>"
     data = base64.b64encode(p.read_bytes()).decode("ascii")
     return f'<img class="plot-img" src="data:image/png;base64,{data}" alt="{p.name}" />'
 
@@ -109,11 +110,7 @@ def _embed_image(path: str) -> str:
 def _escape_html(text: str) -> str:
     """Minimal HTML escaping."""
     return (
-        text
-        .replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
@@ -140,10 +137,11 @@ def _metadata_table_html(metadata: dict[str, str]) -> str:
     return f'<table class="metadata-table"><tbody>{rows_html}</tbody></table>'
 
 
-def _df_to_html(df: "object") -> str:
+def _df_to_html(df: object) -> str:
     """Convert a pandas DataFrame to an HTML table string."""
     try:
         import pandas as pd
+
         if not isinstance(df, pd.DataFrame) or df.empty:
             return "<p><em>No data.</em></p>"
         # Build header
@@ -181,7 +179,7 @@ def render_html_report(
     out = Path(output_path).resolve()
     out.parent.mkdir(parents=True, exist_ok=True)
 
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
 
     sections_html_parts: list[str] = []
     for section in sections:
@@ -192,11 +190,7 @@ def render_html_report(
 
         plots_html = "".join(_embed_image(p) for p in plot_paths)
         sections_html_parts.append(
-            f"<section>"
-            f"<h2>{heading}</h2>"
-            f"{content_html}"
-            f"{plots_html}"
-            f"</section>"
+            f"<section><h2>{heading}</h2>{content_html}{plots_html}</section>"
         )
 
     sections_html = "\n".join(sections_html_parts)
@@ -240,7 +234,7 @@ def render_html_report(
 
 
 def render_nca_report(
-    results: Sequence["NCAResult"],
+    results: Sequence[NCAResult],
     run_id: str,
     output_path: str | Path,
     *,
@@ -248,10 +242,9 @@ def render_nca_report(
     audit_dir: str | Path | None = None,
 ) -> Path:
     """Full NCA HTML report with parameter table + concentration plots + λz regression plots."""
-    from pkplugin.report.tables import build_nca_parameter_table
+
     from pkplugin.report.plots import plot_concentration_time, plot_lambda_z_regression
-    import tempfile
-    import os
+    from pkplugin.report.tables import build_nca_parameter_table
 
     out = Path(output_path).resolve()
     tmp_dir = out.parent / f"_plots_{run_id}"
@@ -260,7 +253,7 @@ def render_nca_report(
         "run_id": run_id,
         "plugin_version": _PKPLUGIN_VERSION,
         "winnonlin_compat": "6.4",
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "timestamp": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }
 
     # Parameter table section
@@ -276,6 +269,7 @@ def render_nca_report(
 
     if include_plots and results:
         import numpy as np
+
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
         plot_paths_conc: list[str] = []
@@ -293,14 +287,18 @@ def render_nca_report(
             if lz.t_start is not None and lz.t_end is not None and lz.n_points >= 2:
                 t_arr = np.linspace(float(lz.t_start), float(lz.t_end), lz.n_points)
                 # Reconstruct concentrations from regression
-                c_arr = np.exp(
-                    float(lz.intercept) - float(lz.lambda_z) * t_arr
-                ) if (lz.intercept is not None and lz.lambda_z is not None) else np.ones(lz.n_points)
+                c_arr = (
+                    np.exp(float(lz.intercept) - float(lz.lambda_z) * t_arr)
+                    if (lz.intercept is not None and lz.lambda_z is not None)
+                    else np.ones(lz.n_points)
+                )
 
                 conc_path = tmp_dir / f"conc_{sid}.png"
                 try:
                     plot_concentration_time(
-                        t_arr, c_arr, conc_path,
+                        t_arr,
+                        c_arr,
+                        conc_path,
                         title=f"Subject {sid}",
                         subject_id=sid,
                     )
@@ -312,7 +310,9 @@ def render_nca_report(
                 try:
                     selected = list(range(len(t_arr)))
                     plot_lambda_z_regression(
-                        t_arr, c_arr, selected,
+                        t_arr,
+                        c_arr,
+                        selected,
                         float(lz.lambda_z) if lz.lambda_z is not None else 0.0,
                         float(lz.intercept) if lz.intercept is not None else 0.0,
                         lz_path,
@@ -323,17 +323,21 @@ def render_nca_report(
                     pass
 
         if plot_paths_conc:
-            sections.append({
-                "heading": "Concentration-Time Profiles",
-                "content_html": "",
-                "plot_paths": plot_paths_conc,
-            })
+            sections.append(
+                {
+                    "heading": "Concentration-Time Profiles",
+                    "content_html": "",
+                    "plot_paths": plot_paths_conc,
+                }
+            )
         if plot_paths_lz:
-            sections.append({
-                "heading": "Lambda_z Regression Plots",
-                "content_html": "",
-                "plot_paths": plot_paths_lz,
-            })
+            sections.append(
+                {
+                    "heading": "Lambda_z Regression Plots",
+                    "content_html": "",
+                    "plot_paths": plot_paths_lz,
+                }
+            )
 
     return render_html_report(
         title=f"NCA Report — Run {run_id}",
@@ -349,7 +353,7 @@ def render_nca_report(
 
 
 def render_be_report(
-    be_result: "BEResult",
+    be_result: BEResult,
     output_path: str | Path,
     *,
     audit_dir: str | Path | None = None,
@@ -363,7 +367,7 @@ def render_be_report(
         "plugin_version": _PKPLUGIN_VERSION,
         "endpoint": str(be_result.endpoint),
         "design": str(be_result.design),
-        "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        "timestamp": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC"),
     }
 
     # Verdict box
@@ -397,6 +401,7 @@ def render_be_report(
     if anova:
         try:
             import pandas as pd
+
             anova_df = pd.DataFrame(anova).T
             anova_df.index.name = "Source"
             anova_df = anova_df.reset_index()
@@ -418,21 +423,25 @@ def render_be_report(
     ]
 
     if anova_html:
-        sections.append({
-            "heading": "ANOVA Table",
-            "content_html": anova_html,
-            "plot_paths": [],
-        })
+        sections.append(
+            {
+                "heading": "ANOVA Table",
+                "content_html": anova_html,
+                "plot_paths": [],
+            }
+        )
 
     if be_result.warnings:
-        warnings_html = "<ul>" + "".join(
-            f"<li>{_escape_html(w)}</li>" for w in be_result.warnings
-        ) + "</ul>"
-        sections.append({
-            "heading": "Warnings",
-            "content_html": warnings_html,
-            "plot_paths": [],
-        })
+        warnings_html = (
+            "<ul>" + "".join(f"<li>{_escape_html(w)}</li>" for w in be_result.warnings) + "</ul>"
+        )
+        sections.append(
+            {
+                "heading": "Warnings",
+                "content_html": warnings_html,
+                "plot_paths": [],
+            }
+        )
 
     return render_html_report(
         title=f"Bioequivalence Report — {be_result.endpoint}",

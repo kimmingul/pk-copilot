@@ -34,7 +34,10 @@ def render_pdf_report(
     try:
         from reportlab.lib import colors  # type: ignore[import-untyped]
         from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore[import-untyped]
+        from reportlab.lib.styles import (  # type: ignore[import-untyped]
+            ParagraphStyle,
+            getSampleStyleSheet,
+        )
         from reportlab.lib.units import cm  # type: ignore[import-untyped]
         from reportlab.platypus import (  # type: ignore[import-untyped]
             HRFlowable,
@@ -117,18 +120,27 @@ def render_pdf_report(
     if metadata:
         meta_data = [[k, v] for k, v in metadata.items()]
         meta_table = Table(meta_data, colWidths=[5 * cm, 12 * cm])
-        meta_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#4a6fa5")),
-            ("TEXTCOLOR", (0, 0), (0, -1), colors.white),
-            ("FONTSIZE", (0, 0), (-1, -1), 8),
-            ("ROWBACKGROUNDS", (1, 0), (-1, -1), [colors.HexColor("#f5f8fc"), colors.white]),
-            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("LEFTPADDING", (0, 0), (-1, -1), 5),
-            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
-            ("TOPPADDING", (0, 0), (-1, -1), 3),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ]))
+        meta_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#4a6fa5")),
+                    ("TEXTCOLOR", (0, 0), (0, -1), colors.white),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    (
+                        "ROWBACKGROUNDS",
+                        (1, 0),
+                        (-1, -1),
+                        [colors.HexColor("#f5f8fc"), colors.white],
+                    ),
+                    ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cccccc")),
+                    ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 5),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+                    ("TOPPADDING", (0, 0), (-1, -1), 3),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+                ]
+            )
+        )
         story.append(meta_table)
         story.append(Spacer(1, 0.4 * cm))
 
@@ -158,7 +170,7 @@ def render_pdf_report(
                     story.append(Paragraph(f"[Image unavailable: {p.name}]", style_normal))
 
     # Disclaimer
-    timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    timestamp = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
     story.append(
         Paragraph(

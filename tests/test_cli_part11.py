@@ -17,8 +17,7 @@ from pathlib import Path
 import pytest
 
 from pkplugin.cli import main
-from pkplugin.compliance.signatures import generate_keypair, save_private_key, sign_run
-
+from pkplugin.compliance.signatures import generate_keypair, save_private_key
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -71,12 +70,18 @@ def test_cmd_sign(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
 
     code, out, err = _run(
         [
-            "sign", run_id,
-            "--identity", "analyst@example.com",
-            "--meaning", "authored",
-            "--key", str(key_path),
-            "--auth-token", "test-session-token",
-            "--out", str(tmp_path),
+            "sign",
+            run_id,
+            "--identity",
+            "analyst@example.com",
+            "--meaning",
+            "authored",
+            "--key",
+            str(key_path),
+            "--auth-token",
+            "test-session-token",
+            "--out",
+            str(tmp_path),
         ],
         capsys,
     )
@@ -180,7 +185,9 @@ def test_cmd_keygen_force_overwrites(tmp_path: Path, capsys: pytest.CaptureFixtu
 # ---------------------------------------------------------------------------
 
 
-def test_cmd_sign_empty_auth_token_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_cmd_sign_empty_auth_token_fails(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
     """sign with no --auth-token (empty string) returns error."""
     run_id = "h3-no-auth-run"
     _make_run(tmp_path, run_id)
@@ -191,12 +198,18 @@ def test_cmd_sign_empty_auth_token_fails(tmp_path: Path, capsys: pytest.CaptureF
     # Explicitly pass empty auth-token
     code, out, err = _run(
         [
-            "sign", run_id,
-            "--identity", "analyst@example.com",
-            "--meaning", "authored",
-            "--key", str(key_path),
-            "--auth-token", "",
-            "--out", str(tmp_path),
+            "sign",
+            run_id,
+            "--identity",
+            "analyst@example.com",
+            "--meaning",
+            "authored",
+            "--key",
+            str(key_path),
+            "--auth-token",
+            "",
+            "--out",
+            str(tmp_path),
         ],
         capsys,
     )

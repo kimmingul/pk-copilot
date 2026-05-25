@@ -14,15 +14,12 @@ Refs: docs/03-algorithms/09-pkpd-models.md §1, §3
 
 from __future__ import annotations
 
-from typing import Sequence
-
 import numpy as np
 from numpy.typing import NDArray
 from scipy.integrate import solve_ivp  # type: ignore[import-untyped]
 from scipy.interpolate import interp1d  # type: ignore[import-untyped]
 
 from pkplugin.pd.models import PDModelType, get_pd_model
-
 
 # ---------------------------------------------------------------------------
 # Direct-effect formulas

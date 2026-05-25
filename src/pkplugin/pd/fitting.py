@@ -111,7 +111,7 @@ def _compute_weights(
 
 
 def _concentrations_from_pk(
-    pk_fit_result: "PKFitResult",
+    pk_fit_result: PKFitResult,
     pk_model_name: str,
     dose: float,
     times: NDArray[np.float64],
@@ -144,7 +144,7 @@ def fit_pd_model(
     model_name: str,
     initial_params: dict[str, float],
     concentrations: NDArray[np.float64] | None = None,
-    pk_fit_result: "PKFitResult | None" = None,
+    pk_fit_result: PKFitResult | None = None,
     pk_model_name: str | None = None,
     dose: float | None = None,
     mode: Literal["sequential", "simultaneous"] = "sequential",
@@ -198,19 +198,13 @@ def fit_pd_model(
             raise ValueError("dose is required when pk_fit_result is provided")
         conc_arr = _concentrations_from_pk(pk_fit_result, pk_model_name, dose, times_arr)
     else:
-        raise ValueError(
-            "Either concentrations or pk_fit_result must be provided."
-        )
+        raise ValueError("Either concentrations or pk_fit_result must be provided.")
 
     if mode == "simultaneous":
         if pk_fit_result is None:
-            raise ValueError(
-                "simultaneous mode requires pk_fit_result to supply PK parameters"
-            )
+            raise ValueError("simultaneous mode requires pk_fit_result to supply PK parameters")
         if pk_model_name is None or dose is None:
-            raise ValueError(
-                "simultaneous mode requires pk_model_name and dose"
-            )
+            raise ValueError("simultaneous mode requires pk_model_name and dose")
         return _fit_simultaneous(
             times_arr,
             obs_arr,
@@ -277,7 +271,7 @@ def fit_pd_model(
 
     raw_residuals = y_pred_final - obs_arr
     weighted_residuals = raw_residuals * np.sqrt(final_weights)
-    rss = float(np.sum(weighted_residuals ** 2))
+    rss = float(np.sum(weighted_residuals**2))
     n_obs = len(obs_arr)
     n_params = len([k for k in initial_params])
 
@@ -345,7 +339,7 @@ def _fit_simultaneous(
     obs_arr: NDArray[np.float64],
     pd_model_name: str,
     pd_initial_params: dict[str, float],
-    pk_fit_result: "PKFitResult",
+    pk_fit_result: PKFitResult,
     pk_model_name: str,
     dose: float,
     weighting: str,
@@ -391,9 +385,7 @@ def _fit_simultaneous(
             nan_policy="propagate",
         )
 
-    all_best: dict[str, float] = {
-        k: float(v) for k, v in lmfit_result.params.valuesdict().items()
-    }
+    all_best: dict[str, float] = {k: float(v) for k, v in lmfit_result.params.valuesdict().items()}
     pd_best = {k[3:]: v for k, v in all_best.items() if k.startswith("pd_")}
     pk_best = {k[3:]: v for k, v in all_best.items() if k.startswith("pk_")}
 
@@ -401,7 +393,7 @@ def _fit_simultaneous(
     y_pred_final = predict_pd(pd_model_name, pd_best, conc_final, times_arr)
 
     raw_residuals = y_pred_final - obs_arr
-    rss = float(np.sum(raw_residuals ** 2))
+    rss = float(np.sum(raw_residuals**2))
     n_obs = len(obs_arr)
     n_params = len(pd_best) + len(pk_best)
     aic, bic = _aic_bic(rss, n_obs, n_params)

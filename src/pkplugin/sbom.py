@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 
 from pkplugin import __version__ as _PKPLUGIN_VERSION
@@ -72,7 +72,7 @@ def generate_sbom(
     Returns:
         SBOM document as a string.
     """
-    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     components = _collect_components()
 
     if format == "cyclonedx-json":

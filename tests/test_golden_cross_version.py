@@ -18,7 +18,6 @@ Refs:
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import pytest
@@ -83,9 +82,7 @@ def _load_csv_records(
     return concs, dose_rec
 
 
-def _run_engine(
-    csv_path: Path, version: str
-) -> dict[str, float | None]:
+def _run_engine(csv_path: Path, version: str) -> dict[str, float | None]:
     """Run the NCA engine for one subject and return the parameters dict."""
     concs, dose = _load_csv_records(csv_path)
     cfg = NCAConfig(winnonlin_version=version)  # type: ignore[arg-type]
@@ -109,15 +106,11 @@ def _assert_matches_golden(
                 f"{param}: expected None (not emitted by this version), got {actual_val!r}"
             )
             continue
-        assert actual_val is not None, (
-            f"{param}: expected {exp_val!r}, engine returned None"
-        )
+        assert actual_val is not None, f"{param}: expected {exp_val!r}, engine returned None"
         assert isinstance(actual_val, float)
         assert isinstance(exp_val, float)
         if exp_val == 0.0:
-            assert abs(actual_val) < 1e-12, (
-                f"{param}: expected 0.0, got {actual_val!r}"
-            )
+            assert abs(actual_val) < 1e-12, f"{param}: expected 0.0, got {actual_val!r}"
         else:
             rel_err = abs((actual_val - exp_val) / exp_val)
             assert rel_err <= tol, (
@@ -181,12 +174,8 @@ def test_v6_4_emits_pred_variants() -> None:
 
     must_have: list[str] = golden["must_contain"]  # type: ignore[assignment]
     for param in must_have:
-        assert param in actual, (
-            f"v6.4 must emit {param!r}, but it was absent from engine output"
-        )
-        assert actual[param] is not None, (
-            f"v6.4 emitted {param!r} but value is None"
-        )
+        assert param in actual, f"v6.4 must emit {param!r}, but it was absent from engine output"
+        assert actual[param] is not None, f"v6.4 emitted {param!r} but value is None"
 
 
 @pytest.mark.golden
@@ -197,9 +186,7 @@ def test_v8_3_emits_pred_variants() -> None:
 
     must_have: list[str] = golden["must_contain"]  # type: ignore[assignment]
     for param in must_have:
-        assert param in actual, (
-            f"v8.3 must emit {param!r}, but it was absent from engine output"
-        )
+        assert param in actual, f"v8.3 must emit {param!r}, but it was absent from engine output"
 
 
 # ---------------------------------------------------------------------------
@@ -255,8 +242,7 @@ def test_cross_version_consistencies_held() -> None:
             continue
 
         assert v53 is not None and v64 is not None and v83 is not None, (
-            f"Parameter {param!r} is None in some version: "
-            f"v5.3={v53!r}, v6.4={v64!r}, v8.3={v83!r}"
+            f"Parameter {param!r} is None in some version: v5.3={v53!r}, v6.4={v64!r}, v8.3={v83!r}"
         )
         assert isinstance(v53, float) and isinstance(v64, float) and isinstance(v83, float)
 
@@ -278,8 +264,8 @@ def test_v6_4_v8_3_byte_identical() -> None:
     params_83 = _run_engine(csv_path, "8.3")
 
     assert set(params_64.keys()) == set(params_83.keys()), (
-        f"Parameter sets differ: only in 6.4={set(params_64)-set(params_83)}, "
-        f"only in 8.3={set(params_83)-set(params_64)}"
+        f"Parameter sets differ: only in 6.4={set(params_64) - set(params_83)}, "
+        f"only in 8.3={set(params_83) - set(params_64)}"
     )
 
     for param in params_64:
@@ -292,9 +278,7 @@ def test_v6_4_v8_3_byte_identical() -> None:
         )
         assert isinstance(v64, float) and isinstance(v83, float)
         # Truly byte-identical (same IEEE 754 bits)
-        assert v64 == v83, (
-            f"{param!r}: v6.4={v64!r} != v8.3={v83!r} — expected byte-identical"
-        )
+        assert v64 == v83, f"{param!r}: v6.4={v64!r} != v8.3={v83!r} — expected byte-identical"
 
 
 @pytest.mark.golden
@@ -313,6 +297,4 @@ def test_reproducibility_within_version() -> None:
             v1, v2 = run1[param], run2[param]
             if v1 is None and v2 is None:
                 continue
-            assert v1 == v2, (
-                f"v{version} {param!r}: run1={v1!r} != run2={v2!r} — not reproducible"
-            )
+            assert v1 == v2, f"v{version} {param!r}: run1={v1!r} != run2={v2!r} — not reproducible"

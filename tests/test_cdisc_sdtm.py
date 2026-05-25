@@ -23,8 +23,6 @@ import pandas as pd
 import pytest
 
 from pkplugin.cdisc.sdtm import (
-    REQUIRED_EX_COLS,
-    REQUIRED_PC_COLS,
     compute_elapsed_time_hours,
     load_sdtm_dm,
     load_sdtm_ex,
@@ -65,9 +63,7 @@ class TestComputeElapsedTimeHours:
         ) == pytest.approx(24.0)
 
     def test_predose_is_negative(self) -> None:
-        result = compute_elapsed_time_hours(
-            "2024-03-01T07:30:00", "2024-03-01T08:00:00"
-        )
+        result = compute_elapsed_time_hours("2024-03-01T07:30:00", "2024-03-01T08:00:00")
         assert result == pytest.approx(-0.5)
 
     def test_date_only_treated_as_midnight(self) -> None:

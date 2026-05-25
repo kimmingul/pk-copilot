@@ -13,8 +13,6 @@ Refs: docs/09-cdisc-support.md §6
 
 from __future__ import annotations
 
-import pytest
-
 from pkplugin.cdisc.paramcd import (
     PARAMCD_REGISTRY,
     ParamCodeEntry,
@@ -108,9 +106,7 @@ class TestBidirectionalMapping:
             pkname = paramcd_to_pkcopilot(paramcd)
             assert pkname is not None
             back = pkcopilot_to_paramcd(pkname)
-            assert back == paramcd, (
-                f"Round-trip failed: {paramcd!r} -> {pkname!r} -> {back!r}"
-            )
+            assert back == paramcd, f"Round-trip failed: {paramcd!r} -> {pkname!r} -> {back!r}"
 
 
 class TestUnknownReturnsNone:

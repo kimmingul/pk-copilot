@@ -12,8 +12,6 @@ Tests:
 from __future__ import annotations
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -23,7 +21,6 @@ from pkplugin.mcp_server import impl_run_be, impl_summarize_nca
 
 # Import the shared data generator from the bioequivalence test module.
 from tests.test_bioequivalence import make_2x2_crossover_data
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

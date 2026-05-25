@@ -37,61 +37,349 @@ from pkplugin.nca.bioequivalence import BEResult, run_bioequivalence
 
 _GOLDEN_ROWS: list[dict[str, object]] = [
     # --- TR sequence (subjects S001–S012): Period 1 = T, Period 2 = R ---
-    {"subject_id": "S001", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 113.88283833246221},
-    {"subject_id": "S001", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 108.32870676749592},
-    {"subject_id": "S002", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t":  85.21437889662116},
-    {"subject_id": "S002", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t":  89.58341352965283},
-    {"subject_id": "S003", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 107.25081812542163},
-    {"subject_id": "S003", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 102.02013400267558},
-    {"subject_id": "S004", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 117.35108709918109},
-    {"subject_id": "S004", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 123.36780599567437},
-    {"subject_id": "S005", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t":  93.23938199059484},
-    {"subject_id": "S005", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t":  95.12294245007146},
-    {"subject_id": "S006", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 109.41742837052107},
-    {"subject_id": "S006", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 111.62780704588721},
-    {"subject_id": "S007", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t":  83.52702114112726},
-    {"subject_id": "S007", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t":  78.66278610665543},
-    {"subject_id": "S008", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 105.12710963760253},
-    {"subject_id": "S008", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 110.51709180756487},
-    {"subject_id": "S009", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 120.92495976572513},
-    {"subject_id": "S009", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 115.02737988572274},
-    {"subject_id": "S010", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t":  91.39311852712287},
-    {"subject_id": "S010", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t":  96.07894391523236},
-    {"subject_id": "S011", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t": 105.12710963760243},
-    {"subject_id": "S011", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t": 104.08107741923887},
-    {"subject_id": "S012", "sequence": "TR", "period": 1, "treatment": "T", "AUC0_t":  81.87307530779820},
-    {"subject_id": "S012", "sequence": "TR", "period": 2, "treatment": "R", "AUC0_t":  80.25187979624783},
+    {
+        "subject_id": "S001",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 113.88283833246221,
+    },
+    {
+        "subject_id": "S001",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 108.32870676749592,
+    },
+    {
+        "subject_id": "S002",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 85.21437889662116,
+    },
+    {
+        "subject_id": "S002",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 89.58341352965283,
+    },
+    {
+        "subject_id": "S003",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 107.25081812542163,
+    },
+    {
+        "subject_id": "S003",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 102.02013400267558,
+    },
+    {
+        "subject_id": "S004",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 117.35108709918109,
+    },
+    {
+        "subject_id": "S004",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 123.36780599567437,
+    },
+    {
+        "subject_id": "S005",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 93.23938199059484,
+    },
+    {
+        "subject_id": "S005",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 95.12294245007146,
+    },
+    {
+        "subject_id": "S006",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 109.41742837052107,
+    },
+    {
+        "subject_id": "S006",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 111.62780704588721,
+    },
+    {
+        "subject_id": "S007",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 83.52702114112726,
+    },
+    {
+        "subject_id": "S007",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 78.66278610665543,
+    },
+    {
+        "subject_id": "S008",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 105.12710963760253,
+    },
+    {
+        "subject_id": "S008",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 110.51709180756487,
+    },
+    {
+        "subject_id": "S009",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 120.92495976572513,
+    },
+    {
+        "subject_id": "S009",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 115.02737988572274,
+    },
+    {
+        "subject_id": "S010",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 91.39311852712287,
+    },
+    {
+        "subject_id": "S010",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 96.07894391523236,
+    },
+    {
+        "subject_id": "S011",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 105.12710963760243,
+    },
+    {
+        "subject_id": "S011",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 104.08107741923887,
+    },
+    {
+        "subject_id": "S012",
+        "sequence": "TR",
+        "period": 1,
+        "treatment": "T",
+        "AUC0_t": 81.87307530779820,
+    },
+    {
+        "subject_id": "S012",
+        "sequence": "TR",
+        "period": 2,
+        "treatment": "R",
+        "AUC0_t": 80.25187979624783,
+    },
     # --- RT sequence (subjects S013–S024): Period 1 = R, Period 2 = T ---
-    {"subject_id": "S013", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 112.74968515793763},
-    {"subject_id": "S013", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 118.53048513203659},
-    {"subject_id": "S014", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t":  93.23938199059484},
-    {"subject_id": "S014", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t":  88.69204367171578},
-    {"subject_id": "S015", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 106.18365465453597},
-    {"subject_id": "S015", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 111.62780704588711},
-    {"subject_id": "S016", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t":  86.07079764250578},
-    {"subject_id": "S016", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t":  81.87307530779820},
-    {"subject_id": "S017", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 125.86000099294779},
-    {"subject_id": "S017", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 119.72173631218104},
-    {"subject_id": "S018", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t":  95.12294245007146},
-    {"subject_id": "S018", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 100.00000000000004},
-    {"subject_id": "S019", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 109.41742837052107},
-    {"subject_id": "S019", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 104.08107741923887},
-    {"subject_id": "S020", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 113.88283833246221},
-    {"subject_id": "S020", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 119.72173631218104},
-    {"subject_id": "S021", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t":  89.58341352965283},
-    {"subject_id": "S021", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t":  90.48374180359603},
-    {"subject_id": "S022", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 106.18365465453606},
-    {"subject_id": "S022", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 107.25081812542173},
-    {"subject_id": "S023", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t":  92.31163463866360},
-    {"subject_id": "S023", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t":  88.69204367171578},
-    {"subject_id": "S024", "sequence": "RT", "period": 1, "treatment": "R", "AUC0_t": 112.74968515793763},
-    {"subject_id": "S024", "sequence": "RT", "period": 2, "treatment": "T", "AUC0_t": 120.92495976572525},
+    {
+        "subject_id": "S013",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 112.74968515793763,
+    },
+    {
+        "subject_id": "S013",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 118.53048513203659,
+    },
+    {
+        "subject_id": "S014",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 93.23938199059484,
+    },
+    {
+        "subject_id": "S014",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 88.69204367171578,
+    },
+    {
+        "subject_id": "S015",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 106.18365465453597,
+    },
+    {
+        "subject_id": "S015",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 111.62780704588711,
+    },
+    {
+        "subject_id": "S016",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 86.07079764250578,
+    },
+    {
+        "subject_id": "S016",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 81.87307530779820,
+    },
+    {
+        "subject_id": "S017",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 125.86000099294779,
+    },
+    {
+        "subject_id": "S017",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 119.72173631218104,
+    },
+    {
+        "subject_id": "S018",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 95.12294245007146,
+    },
+    {
+        "subject_id": "S018",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 100.00000000000004,
+    },
+    {
+        "subject_id": "S019",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 109.41742837052107,
+    },
+    {
+        "subject_id": "S019",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 104.08107741923887,
+    },
+    {
+        "subject_id": "S020",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 113.88283833246221,
+    },
+    {
+        "subject_id": "S020",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 119.72173631218104,
+    },
+    {
+        "subject_id": "S021",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 89.58341352965283,
+    },
+    {
+        "subject_id": "S021",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 90.48374180359603,
+    },
+    {
+        "subject_id": "S022",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 106.18365465453606,
+    },
+    {
+        "subject_id": "S022",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 107.25081812542173,
+    },
+    {
+        "subject_id": "S023",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 92.31163463866360,
+    },
+    {
+        "subject_id": "S023",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 88.69204367171578,
+    },
+    {
+        "subject_id": "S024",
+        "sequence": "RT",
+        "period": 1,
+        "treatment": "R",
+        "AUC0_t": 112.74968515793763,
+    },
+    {
+        "subject_id": "S024",
+        "sequence": "RT",
+        "period": 2,
+        "treatment": "T",
+        "AUC0_t": 120.92495976572525,
+    },
 ]
 
 # Pinned expected values (computed deterministically from the dataset above)
-_EXPECTED_GMR_PCT: float = 99.7919        # tolerance ±1%
-_EXPECTED_CI_LOW_PCT: float = 98.1914     # tolerance ±2%
-_EXPECTED_CI_HIGH_PCT: float = 101.4185   # tolerance ±2%
+_EXPECTED_GMR_PCT: float = 99.7919  # tolerance ±1%
+_EXPECTED_CI_LOW_PCT: float = 98.1914  # tolerance ±2%
+_EXPECTED_CI_HIGH_PCT: float = 101.4185  # tolerance ±2%
 
 
 @pytest.fixture(scope="module")
@@ -171,9 +459,7 @@ def test_golden_sequence_effect_nonsignificant(golden_result: BEResult) -> None:
         f"ANOVA table missing 'sequence': {golden_result.anova_table}"
     )
     p_seq = golden_result.anova_table["sequence"]["p"]
-    assert p_seq > 0.1, (
-        f"Unexpected significant sequence effect: p={p_seq:.4f} (expected > 0.1)"
-    )
+    assert p_seq > 0.1, f"Unexpected significant sequence effect: p={p_seq:.4f} (expected > 0.1)"
 
 
 @pytest.mark.golden
@@ -183,9 +469,7 @@ def test_golden_period_effect_nonsignificant(golden_result: BEResult) -> None:
         f"ANOVA table missing 'period': {golden_result.anova_table}"
     )
     p_per = golden_result.anova_table["period"]["p"]
-    assert p_per > 0.1, (
-        f"Unexpected significant period effect: p={p_per:.4f} (expected > 0.1)"
-    )
+    assert p_per > 0.1, f"Unexpected significant period effect: p={p_per:.4f} (expected > 0.1)"
 
 
 @pytest.mark.golden

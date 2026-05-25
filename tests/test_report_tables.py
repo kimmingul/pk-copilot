@@ -12,18 +12,17 @@ Refs: docs/02-roadmap.md v0.5
 
 from __future__ import annotations
 
-import pytest
 import pandas as pd
+import pytest
 
-from pkplugin.nca.stats import GroupedStats, DescriptiveSummary
+from pkplugin.nca.stats import DescriptiveSummary, GroupedStats
 from pkplugin.report.tables import (
     ParameterTable,
+    build_be_summary_table,
+    build_descriptive_table,
     build_nca_parameter_table,
     pivot_subject_x_parameter,
-    build_descriptive_table,
-    build_be_summary_table,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
@@ -32,8 +31,8 @@ from pkplugin.report.tables import (
 
 def _make_nca_results() -> list:
     """Build minimal NCAResult-like objects via the real engine."""
-    from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
     from pkplugin.nca.engine import calculate_nca
+    from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
     times = [0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0]
     concs = [0.0, 4.0, 8.0, 6.0, 4.0, 2.5, 1.5, 0.5]
@@ -50,20 +49,31 @@ def _make_nca_results() -> list:
 def _make_be_result():
     """Build a real BEResult via run_bioequivalence."""
     import pandas as pd
+
     from pkplugin.nca.bioequivalence import run_bioequivalence
 
-    df = pd.DataFrame({
-        "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6",
-                        "S1", "S2", "S3", "S4", "S5", "S6"],
-        "period": ["1", "1", "1", "1", "1", "1",
-                   "2", "2", "2", "2", "2", "2"],
-        "sequence": ["TR", "TR", "TR", "RT", "RT", "RT",
-                     "TR", "TR", "TR", "RT", "RT", "RT"],
-        "treatment": ["T", "T", "T", "R", "R", "R",
-                      "R", "R", "R", "T", "T", "T"],
-        "AUClast": [110.0, 105.0, 115.0, 100.0, 98.0, 102.0,
-                    95.0, 100.0, 105.0, 112.0, 108.0, 117.0],
-    })
+    df = pd.DataFrame(
+        {
+            "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6", "S1", "S2", "S3", "S4", "S5", "S6"],
+            "period": ["1", "1", "1", "1", "1", "1", "2", "2", "2", "2", "2", "2"],
+            "sequence": ["TR", "TR", "TR", "RT", "RT", "RT", "TR", "TR", "TR", "RT", "RT", "RT"],
+            "treatment": ["T", "T", "T", "R", "R", "R", "R", "R", "R", "T", "T", "T"],
+            "AUClast": [
+                110.0,
+                105.0,
+                115.0,
+                100.0,
+                98.0,
+                102.0,
+                95.0,
+                100.0,
+                105.0,
+                112.0,
+                108.0,
+                117.0,
+            ],
+        }
+    )
     return run_bioequivalence(df, endpoint="AUClast", design="crossover_2x2")
 
 
@@ -138,7 +148,9 @@ def test_pivot_subject_x_parameter_filter() -> None:
     results = _make_nca_results()
     table = build_nca_parameter_table(results)
     wide = pivot_subject_x_parameter(table, parameters=["Cmax", "AUClast"])
-    param_cols = [c for c in wide.columns if c not in ("subject_id", "period", "treatment", "analyte")]
+    param_cols = [
+        c for c in wide.columns if c not in ("subject_id", "period", "treatment", "analyte")
+    ]
     assert set(param_cols).issubset({"Cmax", "AUClast"})
 
 

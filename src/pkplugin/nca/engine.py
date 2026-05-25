@@ -16,11 +16,10 @@ Refs:
 
 from __future__ import annotations
 
-import math
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
 from operator import attrgetter
-from typing import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -38,7 +37,6 @@ from pkplugin.schemas import (
     NCAConfig,
     NCAParameterRow,
 )
-from pkplugin.version import WNVersion, merge_with_defaults
 
 # ---------------------------------------------------------------------------
 # Public result type
@@ -302,12 +300,7 @@ def calculate_nca_subject(
         # B7: When IV bolus and the first AUC point is t=0 with a near-zero
         # concentration (BLOQ replaced to 0), substitute C0 so AUCINF/Vss
         # are computed from the back-extrapolated value, not the BLOQ zero.
-        if (
-            c0 is not None
-            and len(auc_times) >= 1
-            and auc_times[0] == 0.0
-            and auc_concs[0] < 1e-12
-        ):
+        if c0 is not None and len(auc_times) >= 1 and auc_times[0] == 0.0 and auc_concs[0] < 1e-12:
             auc_concs[0] = c0
 
     # ------------------------------------------------------------------
@@ -364,7 +357,7 @@ def calculate_nca_subject(
     )
 
     lambda_z = lz_result.lambda_z
-    lz_intercept = lz_result.intercept
+    _lz_intercept = lz_result.intercept  # noqa: F841 (reserved for v0.5 diagnostics)
     clast_pred = lz_result.clast_pred
 
     if lambda_z is None:
@@ -427,9 +420,7 @@ def calculate_nca_subject(
             aumcinf_pred = _aumcinf_pred_val
 
             if aucinf_pred is not None and aucinf_pred > 0:
-                auc_extrap_pred = (
-                    100.0 * (aucinf_pred - auc_last) / aucinf_pred
-                )
+                auc_extrap_pred = 100.0 * (aucinf_pred - auc_last) / aucinf_pred
 
     # ------------------------------------------------------------------
     # 9. MRT
@@ -450,12 +441,7 @@ def calculate_nca_subject(
             # MAT (MRT_oral - MRT_iv) requires paired IV data — deferred to v0.2.
             mrt_obs = raw_mrt
 
-    if (
-        output_pred
-        and aucinf_pred is not None
-        and aucinf_pred > 0
-        and aumcinf_pred is not None
-    ):
+    if output_pred and aucinf_pred is not None and aucinf_pred > 0 and aumcinf_pred is not None:
         raw_mrt_pred = aumcinf_pred / aucinf_pred
         if route == "iv_bolus":
             mrt_pred = raw_mrt_pred
@@ -681,7 +667,6 @@ def calculate_nca(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
 
 
 def _fmt_time(t: float) -> str:

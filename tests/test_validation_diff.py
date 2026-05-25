@@ -15,20 +15,16 @@ Tests:
 from __future__ import annotations
 
 import json
-import math
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
 from pkplugin.validation.diff import (
-    ParameterDiff,
-    ValidationDiff,
     compute_diff,
     write_validation_diff_json,
 )
 from pkplugin.validation.r_backend import RBackendStatus
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -102,7 +98,8 @@ def test_one_row_5pct_off(tmp_path: Path) -> None:
     ref_csv = _write_param_csv(tmp_path / "ref.csv", ref_rows)
 
     diff = compute_diff(
-        pk_csv, ref_csv,
+        pk_csv,
+        ref_csv,
         tolerance_relative=1e-6,
         r_status=_dummy_r_status(),
     )
@@ -236,7 +233,8 @@ def test_write_validation_diff_json_roundtrip(tmp_path: Path) -> None:
     ref_csv = _write_param_csv(tmp_path / "ref.csv", rows)
 
     diff = compute_diff(
-        pk_csv, ref_csv,
+        pk_csv,
+        ref_csv,
         r_status=_dummy_r_status(),
         reference_backend="PKNCA",
         run_id="test-run-123",

@@ -16,8 +16,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from pkplugin.compliance.signatures import generate_keypair, save_private_key, sign_run
 from pkplugin.mcp_server import (
     impl_get_compliance_status,
@@ -26,7 +24,6 @@ from pkplugin.mcp_server import (
     impl_verify_audit_chain,
     impl_verify_signatures,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

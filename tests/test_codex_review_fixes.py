@@ -16,12 +16,10 @@ import numpy as np
 import pytest
 
 from pkplugin.comp.ode import (
-    DosingEvent,
     MODEL_REQUIRED_PARAMS,
+    DosingEvent,
     simulate_ode,
-    simulate_ode_with_tlag,
 )
-
 
 # ---------------------------------------------------------------------------
 # C1: sentinel 0.0 no longer overwrites real zero observations
@@ -40,9 +38,7 @@ def test_c1_zero_concentration_at_t0_oral_not_overwritten() -> None:
     conc = simulate_ode("cmt1_po", {"V_F": V_F, "ka": ka, "k": k}, dosing, times)
 
     # t=0 central compartment must be 0 (depot is full, central is empty)
-    assert conc[0] == 0.0, (
-        f"Expected C(t=0)=0 for oral model (pre-absorption), got {conc[0]}"
-    )
+    assert conc[0] == 0.0, f"Expected C(t=0)=0 for oral model (pre-absorption), got {conc[0]}"
     # Later times must be positive
     assert np.all(conc[1:] > 0.0), "Post-dose concentrations must be positive"
 
@@ -107,9 +103,7 @@ def test_h1_iv_bolus_second_dose_obs_is_post_dose() -> None:
         f"Expected post-dose C(12)≈{c_at_12_expected:.4f}, got {conc[2]:.4f}"
     )
     # Post-dose must exceed pre-dose concentration
-    assert conc[2] > conc[1], (
-        "C at dose time must exceed C just before dose (post-dose convention)"
-    )
+    assert conc[2] > conc[1], "C at dose time must exceed C just before dose (post-dose convention)"
 
 
 # ---------------------------------------------------------------------------
@@ -123,9 +117,9 @@ def test_h2_mm_linear_regime_matches_analytical() -> None:
 
     Params from spec: Vmax=100 ng/mL/hr, Km=5 ng/mL, V=10 L.
     """
-    V = 10.0     # L
+    V = 10.0  # L
     Vmax = 100.0  # ng/mL/hr  (concentration-based)
-    Km = 5.0     # ng/mL
+    Km = 5.0  # ng/mL
     k_eff = Vmax / Km  # 20 hr⁻¹
 
     # Very small dose so C = A/V << Km throughout
@@ -143,8 +137,9 @@ def test_h2_mm_linear_regime_matches_analytical() -> None:
     c0 = tiny_dose / V
     ref = c0 * np.exp(-k_eff * times)
     # Should agree to within 0.1% in the linear regime
-    np.testing.assert_allclose(conc, ref, rtol=1e-3, atol=1e-15,
-                               err_msg="MM linear regime must match k_eff=Vmax/Km")
+    np.testing.assert_allclose(
+        conc, ref, rtol=1e-3, atol=1e-15, err_msg="MM linear regime must match k_eff=Vmax/Km"
+    )
 
 
 def test_h2_mm_saturation_slows_elimination() -> None:
@@ -230,7 +225,8 @@ def test_h4_dose_route_iv_infusion_requires_duration() -> None:
 
     with pytest.raises(ValueError, match="infusion_duration"):
         fit_pk_model(
-            times, obs,
+            times,
+            obs,
             "cmt1_iv_infusion",
             initial_params={"V": 20.0, "k": 0.3},
             dose=100.0,
@@ -241,20 +237,21 @@ def test_h4_dose_route_iv_infusion_requires_duration() -> None:
 
 def test_h4_dose_route_oral_builds_oral_event() -> None:
     """dose_route='oral' must produce an oral DosingEvent (not iv_bolus)."""
-    from pkplugin.comp.fitting import fit_pk_model
     import math
+
+    from pkplugin.comp.fitting import fit_pk_model
 
     # Generate noiseless oral data
     V_F, ka, k, dose = 20.0, 1.5, 0.3, 100.0
     times = np.array([0.5, 1.0, 2.0, 3.0, 6.0, 12.0])
-    obs = np.array([
-        dose * ka / (V_F * (ka - k)) * (math.exp(-k * t) - math.exp(-ka * t))
-        for t in times
-    ])
+    obs = np.array(
+        [dose * ka / (V_F * (ka - k)) * (math.exp(-k * t) - math.exp(-ka * t)) for t in times]
+    )
 
     # With explicit dose_route="oral"
     result = fit_pk_model(
-        times, obs,
+        times,
+        obs,
         "cmt1_po",
         initial_params={"V_F": 25.0, "ka": 1.0, "k": 0.4},
         dose=dose,
@@ -269,19 +266,20 @@ def test_h4_dose_route_oral_builds_oral_event() -> None:
 
 def test_h4_dose_route_none_infers_oral_from_model_name() -> None:
     """When dose_route is not set and model contains 'po', oral is inferred."""
-    from pkplugin.comp.fitting import fit_pk_model
     import math
+
+    from pkplugin.comp.fitting import fit_pk_model
 
     V_F, ka, k, dose = 20.0, 1.5, 0.3, 100.0
     times = np.array([0.5, 1.0, 2.0, 3.0, 6.0, 12.0])
-    obs = np.array([
-        dose * ka / (V_F * (ka - k)) * (math.exp(-k * t) - math.exp(-ka * t))
-        for t in times
-    ])
+    obs = np.array(
+        [dose * ka / (V_F * (ka - k)) * (math.exp(-k * t) - math.exp(-ka * t)) for t in times]
+    )
 
     # No dose_route supplied — should infer "oral" from "cmt1_po"
     result = fit_pk_model(
-        times, obs,
+        times,
+        obs,
         "cmt1_po",
         initial_params={"V_F": 25.0, "ka": 1.0, "k": 0.4},
         dose=dose,
@@ -306,9 +304,10 @@ def test_h5_missing_initial_param_raises() -> None:
     # cmt1_iv_bolus requires V and k; only provide V
     with pytest.raises(ValueError, match="missing required parameters"):
         fit_pk_model(
-            times, obs,
+            times,
+            obs,
             "cmt1_iv_bolus",
-            initial_params={"V": 20.0},   # missing k
+            initial_params={"V": 20.0},  # missing k
             dose=100.0,
             use_ode=True,
         )
@@ -407,20 +406,24 @@ def test_h7_dose_path_filtered_by_subject() -> None:
 
     with tempfile.TemporaryDirectory() as tmpdir:
         ds_path = Path(tmpdir) / "data.csv"
-        pd.DataFrame({
-            "subject_id": ["S1"] * len(times),
-            "time": times.tolist(),
-            "concentration": concs_s1.tolist(),
-        }).to_csv(ds_path, index=False)
+        pd.DataFrame(
+            {
+                "subject_id": ["S1"] * len(times),
+                "time": times.tolist(),
+                "concentration": concs_s1.tolist(),
+            }
+        ).to_csv(ds_path, index=False)
 
         # Dose CSV has both subjects; S2 has a very different dose
         dose_path = Path(tmpdir) / "doses.csv"
-        pd.DataFrame({
-            "subject_id": ["S1", "S2"],
-            "time": [0.0, 0.0],
-            "amount": [dose_s1, dose_s2],
-            "route": ["iv_bolus", "iv_bolus"],
-        }).to_csv(dose_path, index=False)
+        pd.DataFrame(
+            {
+                "subject_id": ["S1", "S2"],
+                "time": [0.0, 0.0],
+                "amount": [dose_s1, dose_s2],
+                "route": ["iv_bolus", "iv_bolus"],
+            }
+        ).to_csv(dose_path, index=False)
 
         result = impl_fit_pk_model(
             dataset_path=str(ds_path),

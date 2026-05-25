@@ -21,7 +21,6 @@ import pytest
 from pkplugin.comp.analytic import predict
 from pkplugin.comp.fitting import FitResult, fit_pk_model
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -32,6 +31,7 @@ def _make_dosing_event(
     route: str = "iv_bolus",
 ) -> list[object]:
     from pkplugin.comp.ode import DosingEvent
+
     return [DosingEvent(time=0.0, amount=dose, route=route)]  # type: ignore[arg-type]
 
 
@@ -91,9 +91,7 @@ def test_golden_1cmt_iv_bolus_k(fit_1cmt_iv: FitResult) -> None:
 @pytest.mark.golden
 def test_golden_1cmt_iv_bolus_converged(fit_1cmt_iv: FitResult) -> None:
     """1-cmt IV bolus fit must converge on noiseless data."""
-    assert fit_1cmt_iv.diagnostics.converged, (
-        f"Fit did not converge: {fit_1cmt_iv.warnings}"
-    )
+    assert fit_1cmt_iv.diagnostics.converged, f"Fit did not converge: {fit_1cmt_iv.warnings}"
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +109,7 @@ def fit_1cmt_po() -> FitResult:
     times = np.asarray(_times_po(), dtype=np.float64)
     conc = predict("cmt1_po", _TRUE_1CMT_PO, times, _DOSE_1CMT_PO)
     from pkplugin.comp.ode import DosingEvent
+
     dosing = [DosingEvent(time=0.0, amount=_DOSE_1CMT_PO, route="oral")]
     return fit_pk_model(
         times=times,
@@ -275,6 +274,5 @@ def test_golden_bic_1cmt_better_than_2cmt(
     bic_1 = fit_1cmt.diagnostics.bic
     bic_2 = fit_2cmt.diagnostics.bic
     assert bic_2 > bic_1, (
-        f"Expected 2-cmt BIC ({bic_2:.4f}) > 1-cmt BIC ({bic_1:.4f}) "
-        "on purely 1-cmt data"
+        f"Expected 2-cmt BIC ({bic_2:.4f}) > 1-cmt BIC ({bic_1:.4f}) on purely 1-cmt data"
     )

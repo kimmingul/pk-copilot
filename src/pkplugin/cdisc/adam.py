@@ -23,20 +23,69 @@ from pkplugin.nca.engine import NCAResult
 # ---------------------------------------------------------------------------
 
 ADPC_VARIABLES = [
-    "STUDYID", "USUBJID", "SUBJID", "SITEID", "AGE", "AGEU", "SEX", "RACE",
-    "ARM", "ARMCD", "ACTARM",
-    "PARAMCD", "PARAM", "PARAMN", "PARCAT1", "AVAL", "AVALC", "AVALU",
-    "AVISIT", "AVISITN", "ATPT", "ATPTN",
-    "ADTM", "ADY", "ATM", "NRRLT", "ARRLT",
-    "ANL01FL", "SAFFL", "ITTFL", "TRTP", "TRTA",
+    "STUDYID",
+    "USUBJID",
+    "SUBJID",
+    "SITEID",
+    "AGE",
+    "AGEU",
+    "SEX",
+    "RACE",
+    "ARM",
+    "ARMCD",
+    "ACTARM",
+    "PARAMCD",
+    "PARAM",
+    "PARAMN",
+    "PARCAT1",
+    "AVAL",
+    "AVALC",
+    "AVALU",
+    "AVISIT",
+    "AVISITN",
+    "ATPT",
+    "ATPTN",
+    "ADTM",
+    "ADY",
+    "ATM",
+    "NRRLT",
+    "ARRLT",
+    "ANL01FL",
+    "SAFFL",
+    "ITTFL",
+    "TRTP",
+    "TRTA",
 ]
 
 ADPP_VARIABLES = [
-    "STUDYID", "USUBJID", "SUBJID", "SITEID", "AGE", "AGEU", "SEX", "RACE",
-    "ARM", "ARMCD", "ACTARM",
-    "PARAMCD", "PARAM", "PARAMN", "PARCAT1", "PARCAT2",
-    "AVAL", "AVALU", "AVALCAT1", "ANL01FL", "TRTP", "TRTA",
-    "PPCAT", "PPSCAT", "PPSPEC", "PPMETHOD", "PPSTRESU", "DTYPE",
+    "STUDYID",
+    "USUBJID",
+    "SUBJID",
+    "SITEID",
+    "AGE",
+    "AGEU",
+    "SEX",
+    "RACE",
+    "ARM",
+    "ARMCD",
+    "ACTARM",
+    "PARAMCD",
+    "PARAM",
+    "PARAMN",
+    "PARCAT1",
+    "PARCAT2",
+    "AVAL",
+    "AVALU",
+    "AVALCAT1",
+    "ANL01FL",
+    "TRTP",
+    "TRTA",
+    "PPCAT",
+    "PPSCAT",
+    "PPSPEC",
+    "PPMETHOD",
+    "PPSTRESU",
+    "DTYPE",
 ]
 
 # ---------------------------------------------------------------------------
@@ -118,10 +167,18 @@ def build_adpc(
                 aval = None
 
         raw_conc = row.get("raw_concentration")
-        avalc = str(raw_conc) if raw_conc is not None and str(raw_conc) not in ("", "nan", "None") else None
+        avalc = (
+            str(raw_conc)
+            if raw_conc is not None and str(raw_conc) not in ("", "nan", "None")
+            else None
+        )
 
         analyte_raw = row.get("analyte")
-        analyte = str(analyte_raw) if analyte_raw is not None and str(analyte_raw) not in ("", "nan", "None") else "UNKNOWN"
+        analyte = (
+            str(analyte_raw)
+            if analyte_raw is not None and str(analyte_raw) not in ("", "nan", "None")
+            else "UNKNOWN"
+        )
         paramcd = f"{analyte}PC"
         param = f"{analyte} Concentration"
         # PARCAT1: derive from analyte column (parent vs metabolite) or matrix.
@@ -161,13 +218,23 @@ def build_adpc(
             "AVALU": avalu,
             "AVISIT": row.get("visit", pd.NA),
             "AVISITN": row.get("visitnum", pd.NA),
-            "ATPT": str(atpt) if atpt is not None and str(atpt) not in ("", "nan", "None") else pd.NA,
+            "ATPT": str(atpt)
+            if atpt is not None and str(atpt) not in ("", "nan", "None")
+            else pd.NA,
             "ATPTN": atptn if atptn is not None else pd.NA,
-            "ADTM": str(adtm) if adtm is not None and str(adtm) not in ("", "nan", "None") else pd.NA,
+            "ADTM": str(adtm)
+            if adtm is not None and str(adtm) not in ("", "nan", "None")
+            else pd.NA,
             "ADY": pd.NA,
-            "ATM": float(arrlt) if arrlt is not None and not (isinstance(arrlt, float) and pd.isna(arrlt)) else pd.NA,
-            "NRRLT": float(nrrlt) if nrrlt is not None and not (isinstance(nrrlt, float) and pd.isna(nrrlt)) else pd.NA,
-            "ARRLT": float(arrlt) if arrlt is not None and not (isinstance(arrlt, float) and pd.isna(arrlt)) else pd.NA,
+            "ATM": float(arrlt)
+            if arrlt is not None and not (isinstance(arrlt, float) and pd.isna(arrlt))
+            else pd.NA,
+            "NRRLT": float(nrrlt)
+            if nrrlt is not None and not (isinstance(nrrlt, float) and pd.isna(nrrlt))
+            else pd.NA,
+            "ARRLT": float(arrlt)
+            if arrlt is not None and not (isinstance(arrlt, float) and pd.isna(arrlt))
+            else pd.NA,
             "ANL01FL": "Y",
             "SAFFL": pd.NA,
             "ITTFL": pd.NA,
@@ -297,8 +364,7 @@ def write_adam_dataset(
     """
     if format == "xpt":
         raise NotImplementedError(
-            "SAS XPT output is planned for post-v2.0. "
-            "Use format='csv' for now."
+            "SAS XPT output is planned for post-v2.0. Use format='csv' for now."
             # TODO(v2.1): implement XPT output via pyreadstat.write_xport
         )
     dest = Path(path)

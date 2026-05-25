@@ -28,14 +28,11 @@ from pkplugin import __version__ as PKPLUGIN_VERSION
 from pkplugin.audit import (
     AuditEntry,
     audit_dir_default,
-    collect_dependency_versions,
-    collect_os_info,
     file_sha256,
     new_entry,
     new_run_id,
 )
 from pkplugin.ingest import (
-    IngestReport,
     load_dataset,
     to_concentration_records,
     to_dose_records,
@@ -47,6 +44,7 @@ from pkplugin.version import DEFAULTS, WNVersion
 # ---------------------------------------------------------------------------
 # Part 11 chain-emission helper
 # ---------------------------------------------------------------------------
+
 
 def _emit_chain_entry(
     run_dir: Path,
@@ -94,6 +92,7 @@ def _check_comp_available() -> bool:
     if _COMP_AVAILABLE is None:
         try:
             import pkplugin.comp.fitting  # noqa: F401
+
             _COMP_AVAILABLE = True
         except ImportError:
             _COMP_AVAILABLE = False
@@ -290,7 +289,9 @@ def impl_run_nca(
     pdf.to_csv(csv_path, index=False)
 
     script_path = run_dir / "nca_script.py"
-    script_path.write_text(_render_nca_script(ds_path, dose_path_resolved, nca_cfg, subjects, analytes))
+    script_path.write_text(
+        _render_nca_script(ds_path, dose_path_resolved, nca_cfg, subjects, analytes)
+    )
 
     all_warnings: list[str] = []
     for r in results:
@@ -303,20 +304,20 @@ def impl_run_nca(
     lambda_z_diagnostics: dict[str, dict[str, object]] = {}
     for r in results:
         sid = r.subject_id
-        parameters_by_subject[sid] = {
-            k: _serialise_for_json(v) for k, v in r.parameters.items()
-        }
+        parameters_by_subject[sid] = {k: _serialise_for_json(v) for k, v in r.parameters.items()}
         lz = r.lambda_z_result
-        lambda_z_diagnostics[sid] = _serialise_for_json({
-            "t_start": lz.t_start,
-            "t_end": lz.t_end,
-            "n_points": lz.n_points,
-            "r2": lz.r_squared,
-            "adj_r2": lz.adjusted_r_squared,
-            "span_ratio": lz.span_ratio,
-            "method": lz.method,
-            "warnings": lz.warnings,
-        })
+        lambda_z_diagnostics[sid] = _serialise_for_json(
+            {
+                "t_start": lz.t_start,
+                "t_end": lz.t_end,
+                "n_points": lz.n_points,
+                "r2": lz.r_squared,
+                "adj_r2": lz.adjusted_r_squared,
+                "span_ratio": lz.span_ratio,
+                "method": lz.method,
+                "warnings": lz.warnings,
+            }
+        )
 
     entry.results = {
         "n_results": len(results),
@@ -440,7 +441,7 @@ def impl_run_be(
 
     Refs: docs/06-mcp-server.md §3
     """
-    from pkplugin.nca.bioequivalence import BEDesign, run_bioequivalence
+    from pkplugin.nca.bioequivalence import run_bioequivalence
 
     ds_path = Path(parameter_dataset_path).resolve()
     if not ds_path.is_file():
@@ -653,15 +654,8 @@ def impl_summarize_nca(
         # Already wide format
         wide = df.copy()
 
-    # Group and summarise
-    if group_cols:
-        present_group_cols = [c for c in group_cols if c in wide.columns]
-        if present_group_cols:
-            grouped = wide.groupby(present_group_cols, dropna=False)
-        else:
-            grouped = [(({},), wide)]  # type: ignore[assignment]
-    else:
-        grouped = [(({},), wide)]  # type: ignore[assignment]
+    # Group and summarise — actual iteration happens via _groups_iter() below.
+    present_group_cols = [c for c in group_cols if c in wide.columns] if group_cols else []
 
     def _groups_iter(
         df_wide: pd.DataFrame,
@@ -682,7 +676,9 @@ def impl_summarize_nca(
 
     present_group_cols = [c for c in group_cols if c in wide.columns]
     for group_keys_dict, sub_df in _groups_iter(wide, present_group_cols):
-        n_subjects = int(sub_df["subject_id"].nunique()) if "subject_id" in sub_df.columns else len(sub_df)
+        n_subjects = (
+            int(sub_df["subject_id"].nunique()) if "subject_id" in sub_df.columns else len(sub_df)
+        )
         by_parameter: dict[str, Any] = {}
         for param in param_list:
             if param in sub_df.columns:
@@ -780,21 +776,23 @@ def impl_list_pk_models() -> dict[str, Any]:
 
 def _ode_only_models() -> frozenset[str]:
     """Return the set of ODE-only MM model names supported by comp.ode."""
-    from pkplugin.comp.ode import MODEL_REQUIRED_PARAMS
     from pkplugin.comp.models import REGISTRY
+    from pkplugin.comp.ode import MODEL_REQUIRED_PARAMS
+
     return frozenset(MODEL_REQUIRED_PARAMS) - frozenset(REGISTRY)
 
 
 def _all_supported_models() -> frozenset[str]:
     """Combined set: REGISTRY linear models + ODE-only MM models (H6)."""
     from pkplugin.comp.models import REGISTRY
+
     return frozenset(REGISTRY) | _ode_only_models()
 
 
 def _parse_dose_csv(
-    dose_path: "Path",
-    subject_id: "str | None" = None,
-) -> "list[Any]":
+    dose_path: Path,
+    subject_id: str | None = None,
+) -> list[Any]:
     """Parse a dose CSV and return a list of DosingEvent objects.
 
     M3: Filters rows by subject_id when provided so that each subject's
@@ -852,10 +850,7 @@ def impl_simulate_pk_model(
     if model_name not in all_supported:
         return {
             "status": "error",
-            "error": (
-                f"Unknown model: {model_name!r}. "
-                f"Available: {sorted(all_supported)}"
-            ),
+            "error": (f"Unknown model: {model_name!r}. Available: {sorted(all_supported)}"),
         }
 
     try:
@@ -864,24 +859,22 @@ def impl_simulate_pk_model(
         # has_michaelis_menten=True. Plain non-REGISTRY names also route to ODE
         # as a defensive fallback.
         spec_lookup = REGISTRY.get(model_name)
-        is_ode_only = (
-            spec_lookup is None or spec_lookup.has_michaelis_menten
-        )
+        is_ode_only = spec_lookup is None or spec_lookup.has_michaelis_menten
         if is_ode_only:
             from pkplugin.comp.ode import DosingEvent, simulate_ode, simulate_ode_with_tlag
-            import numpy as np
 
             # Infer route from model name
             if "po" in model_name:
                 route_str: Any = "oral"
             else:
                 route_str = "iv_bolus"
-            dosing_ev = [DosingEvent(time=0.0, amount=dose, route=route_str,
-                                     infusion_duration=infusion_duration)]
-            if tlag > 0.0:
-                conc = simulate_ode_with_tlag(
-                    model_name, params, dosing_ev, times, tlag=tlag
+            dosing_ev = [
+                DosingEvent(
+                    time=0.0, amount=dose, route=route_str, infusion_duration=infusion_duration
                 )
+            ]
+            if tlag > 0.0:
+                conc = simulate_ode_with_tlag(model_name, params, dosing_ev, times, tlag=tlag)
             else:
                 conc = simulate_ode(model_name, params, dosing_ev, times)
         else:
@@ -934,13 +927,13 @@ def impl_fit_pk_model(
 
     Refs: docs/03-algorithms/08-compartmental-models.md §4–§6
     """
-    from pkplugin.comp.models import REGISTRY
     from pkplugin.comp.fitting import (
         FitResult,
-        WeightScheme,
-        ResidualErrorModel,
+    )
+    from pkplugin.comp.fitting import (
         fit_pk_model as _fit_pk_model,
     )
+    from pkplugin.comp.models import REGISTRY
     from pkplugin.comp.ode import DosingEvent
 
     # --- Validate model name first so we can return a clean error ---
@@ -949,10 +942,7 @@ def impl_fit_pk_model(
     if model_name not in all_supported:
         return {
             "status": "error",
-            "error": (
-                f"Unknown model: {model_name!r}. "
-                f"Available: {sorted(all_supported)}"
-            ),
+            "error": (f"Unknown model: {model_name!r}. Available: {sorted(all_supported)}"),
         }
 
     # --- Validate dataset path ---
@@ -1021,17 +1011,13 @@ def impl_fit_pk_model(
     if weighting not in _valid_weightings:
         return {
             "status": "error",
-            "error": (
-                f"Invalid weighting {weighting!r}. "
-                f"Choose from: {sorted(_valid_weightings)}"
-            ),
+            "error": (f"Invalid weighting {weighting!r}. Choose from: {sorted(_valid_weightings)}"),
         }
     if residual_error not in _valid_residual:
         return {
             "status": "error",
             "error": (
-                f"Invalid residual_error {residual_error!r}. "
-                f"Choose from: {sorted(_valid_residual)}"
+                f"Invalid residual_error {residual_error!r}. Choose from: {sorted(_valid_residual)}"
             ),
         }
 
@@ -1122,7 +1108,17 @@ def impl_fit_pk_model(
     # Write reproducible script
     script_path = run_dir / "fit_script.py"
     script_path.write_text(
-        _render_fit_script(ds_path, dose_path_resolved, model_name, initial_params, dose, weighting, residual_error, use_ode, winnonlin_version)
+        _render_fit_script(
+            ds_path,
+            dose_path_resolved,
+            model_name,
+            initial_params,
+            dose,
+            weighting,
+            residual_error,
+            use_ode,
+            winnonlin_version,
+        )
     )
 
     _wn_model_id = spec.winnonlin_model_id if spec is not None else None
@@ -1278,13 +1274,11 @@ def impl_simulate_pd_model(
     if model_name not in PD_REGISTRY:
         return {
             "status": "error",
-            "error": (
-                f"Unknown PD model: {model_name!r}. "
-                f"Available: {sorted(PD_REGISTRY)}"
-            ),
+            "error": (f"Unknown PD model: {model_name!r}. Available: {sorted(PD_REGISTRY)}"),
         }
 
     import numpy as np
+
     from pkplugin.pd.predict import predict_pd
 
     try:
@@ -1322,16 +1316,14 @@ def impl_fit_pd_model(
 
     Refs: docs/03-algorithms/09-pkpd-models.md §2
     """
+    from pkplugin.pd.fitting import PDFitResult
+    from pkplugin.pd.fitting import fit_pd_model as _fit_pd_model
     from pkplugin.pd.models import PD_REGISTRY
-    from pkplugin.pd.fitting import fit_pd_model as _fit_pd_model, PDFitResult
 
     if model_name not in PD_REGISTRY:
         return {
             "status": "error",
-            "error": (
-                f"Unknown PD model: {model_name!r}. "
-                f"Available: {sorted(PD_REGISTRY)}"
-            ),
+            "error": (f"Unknown PD model: {model_name!r}. Available: {sorted(PD_REGISTRY)}"),
         }
 
     ds_path = Path(pd_dataset_path).resolve()
@@ -1561,7 +1553,9 @@ def impl_generate_report(
                     for v in row
                 )
                 rows_html += f"<tr>{cells}</tr>"
-            param_table_html = f"<table><thead><tr>{headers}</tr></thead><tbody>{rows_html}</tbody></table>"
+            param_table_html = (
+                f"<table><thead><tr>{headers}</tr></thead><tbody>{rows_html}</tbody></table>"
+            )
 
             sections: list[dict[str, Any]] = [
                 {
@@ -1679,9 +1673,7 @@ def impl_get_winnonlin_versions() -> dict[str, Any]:
     """List supported WinNonlin versions + their default option matrix."""
     return {
         "versions": [v.value for v in WNVersion],
-        "defaults": {
-            v.value: _serialise_for_json(opts) for v, opts in DEFAULTS.items()
-        },
+        "defaults": {v.value: _serialise_for_json(opts) for v, opts in DEFAULTS.items()},
     }
 
 
@@ -1738,21 +1730,20 @@ def impl_compare_against_reference(
 
     Refs: docs/06-mcp-server.md §8, docs/08-validation-strategy.md §4
     """
+    from pkplugin.validation.diff import compute_diff, write_validation_diff_json
     from pkplugin.validation.r_backend import (
         RBackendStatus,
         check_r_backend,
         run_r_noncompart,
         run_r_pknca,
     )
-    from pkplugin.validation.diff import compute_diff, write_validation_diff_json
 
     backend_key = reference_backend.lower().strip()
     if backend_key not in ("pknca", "noncompart"):
         return {
             "status": "error",
             "error": (
-                f"Unknown reference_backend {reference_backend!r}. "
-                "Choose 'pknca' or 'noncompart'."
+                f"Unknown reference_backend {reference_backend!r}. Choose 'pknca' or 'noncompart'."
             ),
         }
 
@@ -1763,9 +1754,7 @@ def impl_compare_against_reference(
     if not parameters_csv.is_file():
         return {
             "status": "error",
-            "error": (
-                f"parameters.csv not found for run_id={run_id!r}: {parameters_csv}"
-            ),
+            "error": (f"parameters.csv not found for run_id={run_id!r}: {parameters_csv}"),
         }
 
     # Step 2 — check R availability
@@ -1835,8 +1824,7 @@ def impl_compare_against_reference(
         return {
             "status": "error",
             "error": (
-                f"R script exited {r_result.return_code}. "
-                f"stderr: {r_result.raw_stderr[:500]}"
+                f"R script exited {r_result.return_code}. stderr: {r_result.raw_stderr[:500]}"
             ),
         }
 
@@ -1855,9 +1843,7 @@ def impl_compare_against_reference(
         run_id=run_id,
     )
 
-    diff_json_path = write_validation_diff_json(
-        diff, run_dir / "validation_diff.json"
-    )
+    diff_json_path = write_validation_diff_json(diff, run_dir / "validation_diff.json")
 
     outside_diffs: list[dict[str, Any]] = [
         {
@@ -1976,7 +1962,6 @@ def impl_export_adam(
     """
     from pkplugin.cdisc.adam import build_adpp, write_adam_dataset
     from pkplugin.cdisc.define_xml import generate_define_xml
-    from pkplugin.cdisc.paramcd import pkcopilot_to_paramcd
     from pkplugin.cdisc.validate import validate_adpp
 
     audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
@@ -1996,13 +1981,15 @@ def impl_export_adam(
 
     # Build minimal NCAResult-like objects from the saved parameter CSV
     # We reconstruct parameters dict per subject group
-    from pkplugin.nca.engine import NCAResult
     from pkplugin.nca.auc import AUCResult
+    from pkplugin.nca.engine import NCAResult
     from pkplugin.nca.lambda_z import LambdaZResult
 
     # Build per-subject parameter dicts
     nca_results: list[NCAResult] = []
-    group_cols = [c for c in ("subject_id", "period", "treatment", "analyte") if c in params_df.columns]
+    group_cols = [
+        c for c in ("subject_id", "period", "treatment", "analyte") if c in params_df.columns
+    ]
 
     for group_key, group in params_df.groupby(group_cols, dropna=False):
         if isinstance(group_key, str):
@@ -2017,14 +2004,27 @@ def impl_export_adam(
         for _, prow in group.iterrows():
             pname = str(prow.get("parameter", ""))
             pval = prow.get("value")
-            params[pname] = float(pval) if pval is not None and not (isinstance(pval, float) and pd.isna(pval)) else None
+            params[pname] = (
+                float(pval)
+                if pval is not None and not (isinstance(pval, float) and pd.isna(pval))
+                else None
+            )
 
         # Build a minimal NCAResult (only parameters and metadata needed for ADPP)
         dummy_auc = AUCResult(auc=0.0, aumc=0.0, method="linear_up_log_down", n_intervals=0)
         dummy_lz = LambdaZResult(
-            lambda_z=None, intercept=None, half_life=None, r_squared=None,
-            adjusted_r_squared=None, n_points=0, t_start=None, t_end=None,
-            clast_pred=None, span_ratio=None, method="best_fit", warnings=[],
+            lambda_z=None,
+            intercept=None,
+            half_life=None,
+            r_squared=None,
+            adjusted_r_squared=None,
+            n_points=0,
+            t_start=None,
+            t_end=None,
+            clast_pred=None,
+            span_ratio=None,
+            method="best_fit",
+            warnings=[],
         )
         nr = NCAResult(
             subject_id=subject_id,
@@ -2055,8 +2055,7 @@ def impl_export_adam(
         # M3: ADPC export is deferred — be explicit rather than silently skipping
         "adpc_status": "not_implemented_v2_0",
         "adpc_note": (
-            "ADaM ADPC export deferred to v2.1; "
-            "impl_export_adam currently writes ADPP only."
+            "ADaM ADPC export deferred to v2.1; impl_export_adam currently writes ADPP only."
         ),
     }
 
@@ -2156,8 +2155,8 @@ def impl_sign_record(
         audit_dir: Base audit directory (default: PKPLUGIN_AUDIT_DIR or pk_runs/).
     """
     try:
-        from pkplugin.compliance.signatures import SignatureMeaning, sign_run
         from pkplugin.compliance.audit_chain import AuditChain
+        from pkplugin.compliance.signatures import sign_run
     except ImportError as exc:
         return {"status": "error", "error": f"compliance module unavailable: {exc}"}
 
@@ -2246,9 +2245,9 @@ def impl_lock_run(
         audit_dir: Base audit directory.
     """
     try:
+        from pkplugin.compliance.audit_chain import AuditChain
         from pkplugin.compliance.retention import lock_run
         from pkplugin.compliance.signatures import SignatureMeaning as _SM
-        from pkplugin.compliance.audit_chain import AuditChain
     except ImportError as exc:
         return {"status": "error", "error": f"compliance module unavailable: {exc}"}
 
@@ -2261,6 +2260,7 @@ def impl_lock_run(
     req_sigs: list[_SM] | None = None
     if require_signatures is not None:
         from typing import cast as _cast
+
         _valid: set[str] = {"authored", "reviewed", "approved", "rejected"}
         req_sigs = _cast(list[_SM], [s for s in require_signatures if s in _valid])
 
@@ -2340,7 +2340,7 @@ def impl_verify_signatures(
         Dict with keys: ok, n_signatures, failures.
     """
     try:
-        from pkplugin.compliance.signatures import verify_all_signatures, load_signatures
+        from pkplugin.compliance.signatures import load_signatures, verify_all_signatures
     except ImportError as exc:
         return {"status": "error", "error": f"compliance module unavailable: {exc}"}
 
@@ -2387,6 +2387,7 @@ def impl_get_compliance_status() -> dict[str, Any]:
     # Check cryptography availability
     try:
         import cryptography
+
         status["cryptography_available"] = True
         status["cryptography_version"] = cryptography.__version__
     except ImportError:
@@ -2395,7 +2396,8 @@ def impl_get_compliance_status() -> dict[str, Any]:
 
     # Check compliance sub-package
     try:
-        from pkplugin.compliance import audit_chain, signatures, access, retention  # noqa: F401
+        from pkplugin.compliance import access, audit_chain, retention, signatures  # noqa: F401
+
         status["compliance_module_available"] = True
     except ImportError as exc:
         status["compliance_module_available"] = False
@@ -2453,9 +2455,7 @@ def _build_mcp() -> Any:
     try:
         from fastmcp import FastMCP
     except ImportError as exc:
-        raise ImportError(
-            "fastmcp is not installed. Install with: pip install fastmcp"
-        ) from exc
+        raise ImportError("fastmcp is not installed. Install with: pip install fastmcp") from exc
 
     mcp = FastMCP("pk-kernel")
 
@@ -2548,9 +2548,7 @@ def _build_mcp() -> Any:
         F: float = 1.0,
     ) -> dict[str, Any]:
         """Forward simulate a PK compartmental model; returns {times, concentrations}."""
-        return impl_simulate_pk_model(
-            model_name, params, dose, times, infusion_duration, tlag, F
-        )
+        return impl_simulate_pk_model(model_name, params, dose, times, infusion_duration, tlag, F)
 
     @mcp.tool
     def fit_pk_model(
@@ -2683,8 +2681,13 @@ def _build_mcp() -> Any:
     ) -> dict[str, Any]:
         """Sign a run bundle with Ed25519 key (§11.50/§11.70/§11.200)."""
         return impl_sign_record(
-            run_id, signer_identity, meaning, auth_token,
-            private_key_path, passphrase, audit_dir,
+            run_id,
+            signer_identity,
+            meaning,
+            auth_token,
+            private_key_path,
+            passphrase,
+            audit_dir,
         )
 
     @mcp.tool

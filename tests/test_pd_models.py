@@ -12,16 +12,14 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from pkplugin.pd.fitting import detect_hysteresis
 from pkplugin.pd.models import (
-    PDModelSpec,
-    PDModelType,
     PD_REGISTRY,
+    PDModelType,
     get_pd_model,
     list_pd_models,
 )
 from pkplugin.pd.predict import predict_pd
-from pkplugin.pd.fitting import detect_hysteresis
-
 
 # ---------------------------------------------------------------------------
 # Registry / model-spec tests
@@ -271,13 +269,11 @@ def test_hysteresis_counter_clockwise() -> None:
     # Explicit counter-clockwise ellipse parameterised by time:
     # C(t) = cos(t) + 1,   E(t) = sin(t) + 1   → CCW unit circle + offset
     t = np.linspace(0, 2 * np.pi * 0.99, 200)  # almost full loop
-    conc = np.cos(t) + 2.0   # keeps C > 0
+    conc = np.cos(t) + 2.0  # keeps C > 0
     effect = np.sin(t) + 2.0
 
     result = detect_hysteresis(conc, effect, t)
-    assert result == "counter_clockwise", (
-        f"Expected counter_clockwise, got {result!r}"
-    )
+    assert result == "counter_clockwise", f"Expected counter_clockwise, got {result!r}"
 
 
 def test_hysteresis_monotonic_decay() -> None:

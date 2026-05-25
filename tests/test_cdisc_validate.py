@@ -14,10 +14,8 @@ Refs: docs/09-cdisc-support.md §9.2
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from pkplugin.cdisc.validate import validate_adpc, validate_adpp
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -68,7 +66,9 @@ class TestValidateAdpp:
 
     def test_missing_required_columns_flagged_error(self) -> None:
         # Remove PARAMCD
-        df = pd.DataFrame([{"STUDYID": "STUDY01", "USUBJID": "STUDY01-001", "AVAL": 1.0, "AVALU": "ng/mL"}])
+        df = pd.DataFrame(
+            [{"STUDYID": "STUDY01", "USUBJID": "STUDY01-001", "AVAL": 1.0, "AVALU": "ng/mL"}]
+        )
         issues = validate_adpp(df)
         errors = [i for i in issues if i["severity"] == "ERROR"]
         assert any("PPCAT" in i["message"] or "missing" in i["message"].lower() for i in errors)
@@ -76,7 +76,9 @@ class TestValidateAdpp:
     def test_unknown_paramcd_flagged_error(self) -> None:
         df = pd.DataFrame([_valid_adpp_row(paramcd="XXXXUNKNOWN")])
         issues = validate_adpp(df)
-        errors = [i for i in issues if i["severity"] == "ERROR" and "PARAMCD" in i.get("column", "")]
+        errors = [
+            i for i in issues if i["severity"] == "ERROR" and "PARAMCD" in i.get("column", "")
+        ]
         assert len(errors) >= 1
 
     def test_aval_string_flagged_error(self) -> None:
@@ -90,7 +92,9 @@ class TestValidateAdpp:
     def test_bad_usubjid_format_warns(self) -> None:
         df = pd.DataFrame([_valid_adpp_row(usubjid="BADFORMAT")])
         issues = validate_adpp(df)
-        warnings = [i for i in issues if i["severity"] == "WARNING" and "USUBJID" in i.get("column", "")]
+        warnings = [
+            i for i in issues if i["severity"] == "WARNING" and "USUBJID" in i.get("column", "")
+        ]
         assert len(warnings) >= 1
 
     def test_empty_dataframe_errors_on_required_cols(self) -> None:
@@ -131,7 +135,9 @@ class TestValidateAdpc:
         row["ADTM"] = "not-a-date"
         df = pd.DataFrame([row])
         issues = validate_adpc(df)
-        warnings = [i for i in issues if i["severity"] == "WARNING" and "ADTM" in i.get("column", "")]
+        warnings = [
+            i for i in issues if i["severity"] == "WARNING" and "ADTM" in i.get("column", "")
+        ]
         assert len(warnings) >= 1
 
     def test_concentration_paramcd_not_flagged(self) -> None:
@@ -139,7 +145,6 @@ class TestValidateAdpc:
         df = pd.DataFrame([_valid_adpc_row(paramcd="DRUG1PC")])
         issues = validate_adpc(df)
         paramcd_errors = [
-            i for i in issues
-            if i["severity"] == "ERROR" and i.get("column") == "PARAMCD"
+            i for i in issues if i["severity"] == "ERROR" and i.get("column") == "PARAMCD"
         ]
         assert len(paramcd_errors) == 0

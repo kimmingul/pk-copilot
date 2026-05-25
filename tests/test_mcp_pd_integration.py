@@ -14,14 +14,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from pkplugin.mcp_server import (
     impl_fit_pd_model,
     impl_list_pd_models,
     impl_simulate_pd_model,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -151,8 +149,16 @@ def test_impl_list_pd_models_returns_all() -> None:
     assert result["n_models"] == 10
     names = {m["name"] for m in result["models"]}
     expected = {
-        "linear", "log_linear", "emax", "sigmoid_emax", "inhibitory_emax",
-        "effect_compartment", "idr_i", "idr_ii", "idr_iii", "idr_iv",
+        "linear",
+        "log_linear",
+        "emax",
+        "sigmoid_emax",
+        "inhibitory_emax",
+        "effect_compartment",
+        "idr_i",
+        "idr_ii",
+        "idr_iii",
+        "idr_iv",
     }
     assert names == expected
 

@@ -24,8 +24,9 @@ Refs:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
 
@@ -125,10 +126,10 @@ def _build_rule_from_defaults(winnonlin_version: str) -> BLOQRule:
     """Construct a ``BLOQRule`` from the version-specific DEFAULTS matrix."""
     policy: dict[str, str] = get_default(winnonlin_version, "bloq_policy")
     return BLOQRule(
-        pre_dose=policy["pre_dose"],      # type: ignore[arg-type]
+        pre_dose=policy["pre_dose"],  # type: ignore[arg-type]
         up_leading=policy["up_leading"],  # type: ignore[arg-type]
-        embedded=policy["embedded"],      # type: ignore[arg-type]
-        trailing=policy["trailing"],      # type: ignore[arg-type]
+        embedded=policy["embedded"],  # type: ignore[arg-type]
+        trailing=policy["trailing"],  # type: ignore[arg-type]
     )
 
 

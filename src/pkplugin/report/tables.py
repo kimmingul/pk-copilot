@@ -9,15 +9,16 @@ Refs: docs/02-roadmap.md v0.5
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
+from typing import TYPE_CHECKING
 
 import pandas as pd
 
 if TYPE_CHECKING:
+    from pkplugin.nca.bioequivalence import BEResult
     from pkplugin.nca.engine import NCAResult
     from pkplugin.nca.stats import GroupedStats
-    from pkplugin.nca.bioequivalence import BEResult
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +42,7 @@ class ParameterTable:
 
 
 def build_nca_parameter_table(
-    results: Sequence["NCAResult"],
+    results: Sequence[NCAResult],
     title: str = "NCA Parameters",
     include_warnings: bool = True,
 ) -> ParameterTable:
@@ -76,12 +77,24 @@ def build_nca_parameter_table(
             if not metadata and prow.winnonlin_version:
                 metadata["winnonlin_version"] = prow.winnonlin_version
 
-    df = pd.DataFrame(rows) if rows else pd.DataFrame(
-        columns=[
-            "subject_id", "period", "treatment", "analyte",
-            "parameter", "value", "unit", "method",
-            "winnonlin_version", "flags", "comment",
-        ]
+    df = (
+        pd.DataFrame(rows)
+        if rows
+        else pd.DataFrame(
+            columns=[
+                "subject_id",
+                "period",
+                "treatment",
+                "analyte",
+                "parameter",
+                "value",
+                "unit",
+                "method",
+                "winnonlin_version",
+                "flags",
+                "comment",
+            ]
+        )
     )
     return ParameterTable(rows=rows, df=df, title=title, metadata=metadata)
 
@@ -129,7 +142,7 @@ def pivot_subject_x_parameter(
 
 
 def build_descriptive_table(
-    stats_groups: Sequence["GroupedStats"],
+    stats_groups: Sequence[GroupedStats],
     title: str = "Descriptive Statistics",
 ) -> ParameterTable:
     """Long-format descriptive statistics table.
@@ -175,7 +188,7 @@ def build_descriptive_table(
 
 
 def build_be_summary_table(
-    be_result: "BEResult",
+    be_result: BEResult,
     title: str = "Bioequivalence Summary",
 ) -> ParameterTable:
     """One-row summary table with key BE outputs (GMR, 90% CI, verdict).

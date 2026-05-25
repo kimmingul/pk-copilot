@@ -13,6 +13,7 @@ Refs:
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from datetime import UTC
 from pathlib import Path
 
 from pkplugin.cdisc.adam import ADPC_VARIABLES, ADPP_VARIABLES
@@ -51,11 +52,37 @@ _DATASET_META: dict[str, dict[str, str]] = {
 
 # Simple column type hints for Define-XML ItemDef DataType attribute
 _CHAR_COLS = {
-    "STUDYID", "USUBJID", "SUBJID", "SITEID", "AGEU", "SEX", "RACE",
-    "ARM", "ARMCD", "ACTARM", "PARAMCD", "PARAM", "AVALC", "AVALU",
-    "AVISIT", "ATPT", "ADTM", "ANL01FL", "SAFFL", "ITTFL", "TRTP", "TRTA",
-    "PARCAT1", "PARCAT2", "AVALCAT1", "PPCAT", "PPSCAT", "PPSPEC",
-    "PPMETHOD", "PPSTRESU", "DTYPE",
+    "STUDYID",
+    "USUBJID",
+    "SUBJID",
+    "SITEID",
+    "AGEU",
+    "SEX",
+    "RACE",
+    "ARM",
+    "ARMCD",
+    "ACTARM",
+    "PARAMCD",
+    "PARAM",
+    "AVALC",
+    "AVALU",
+    "AVISIT",
+    "ATPT",
+    "ADTM",
+    "ANL01FL",
+    "SAFFL",
+    "ITTFL",
+    "TRTP",
+    "TRTA",
+    "PARCAT1",
+    "PARCAT2",
+    "AVALCAT1",
+    "PPCAT",
+    "PPSCAT",
+    "PPSPEC",
+    "PPMETHOD",
+    "PPSTRESU",
+    "DTYPE",
 }
 
 
@@ -169,24 +196,33 @@ def generate_define_xml(
         item_refs: list[ET.Element] = []
         for order_num, col in enumerate(cols, start=1):
             item_oid = f"IT.{domain_upper}.{col}"
-            ir = ET.SubElement(igd, "ItemRef", {
-                "ItemOID": item_oid,
-                "OrderNumber": str(order_num),
-                "Mandatory": "Yes" if col in ("STUDYID", "USUBJID", "PARAMCD", "AVAL") else "No",
-                "KeySequence": "1" if col == "USUBJID" else "",
-            })
+            ir = ET.SubElement(
+                igd,
+                "ItemRef",
+                {
+                    "ItemOID": item_oid,
+                    "OrderNumber": str(order_num),
+                    "Mandatory": "Yes"
+                    if col in ("STUDYID", "USUBJID", "PARAMCD", "AVAL")
+                    else "No",
+                    "KeySequence": "1" if col == "USUBJID" else "",
+                },
+            )
             item_refs.append(ir)
 
             # Build ItemDef
-            idef = ET.Element("ItemDef", {
-                "OID": item_oid,
-                "Name": col,
-                "DataType": _col_datatype(col),
-                "Length": "200" if _col_datatype(col) == "text" else "8",
-                "SASFieldName": col[:8],   # SAS limit
-                "def:Label": col,
-                "def:Origin": "Derived",
-            })
+            idef = ET.Element(
+                "ItemDef",
+                {
+                    "OID": item_oid,
+                    "Name": col,
+                    "DataType": _col_datatype(col),
+                    "Length": "200" if _col_datatype(col) == "text" else "8",
+                    "SASFieldName": col[:8],  # SAS limit
+                    "def:Label": col,
+                    "def:Origin": "Derived",
+                },
+            )
             all_item_defs.append(idef)
 
         item_refs_by_domain[domain_upper] = item_refs
@@ -209,17 +245,25 @@ def generate_define_xml(
     # CodeList — PARAMCD
     # -----------------------------------------------------------------------
     if paramcds_used:
-        cl = ET.SubElement(mdv, "CodeList", {
-            "OID": "CL.PARAMCD",
-            "Name": "PARAMCD",
-            "DataType": "text",
-        })
+        cl = ET.SubElement(
+            mdv,
+            "CodeList",
+            {
+                "OID": "CL.PARAMCD",
+                "Name": "PARAMCD",
+                "DataType": "text",
+            },
+        )
         for paramcd in sorted(set(paramcds_used)):
             entry = PARAMCD_REGISTRY.get(paramcd.upper())
             if entry is not None:
-                clitem = ET.SubElement(cl, "EnumeratedItem", {
-                    "CodedValue": entry.paramcd,
-                })
+                clitem = ET.SubElement(
+                    cl,
+                    "EnumeratedItem",
+                    {
+                        "CodedValue": entry.paramcd,
+                    },
+                )
                 ET.SubElement(clitem, "Decode").text = entry.param
 
     # -----------------------------------------------------------------------
@@ -239,8 +283,9 @@ def generate_define_xml(
 
 def _utc_now() -> str:
     """Return current UTC datetime as ISO 8601 string (no sub-second)."""
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    from datetime import datetime
+
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _text_el(parent: ET.Element, tag: str, text: str) -> ET.Element:

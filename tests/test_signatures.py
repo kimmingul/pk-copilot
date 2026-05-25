@@ -22,7 +22,6 @@ import pytest
 
 from pkplugin.compliance.signatures import (
     KeyPair,
-    Signature,
     compute_run_hash,
     generate_keypair,
     load_signatures,
@@ -31,7 +30,6 @@ from pkplugin.compliance.signatures import (
     verify_all_signatures,
     verify_signature,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -148,8 +146,12 @@ def test_multiple_signatures_per_run(tmp_path: Path) -> None:
     save_private_key(kp1, k1)
     save_private_key(kp2, k2)
 
-    sign_run(run_dir=run_dir, signer_id="analyst@example.com", meaning="authored", private_key_path=k1)
-    sign_run(run_dir=run_dir, signer_id="approver@example.com", meaning="reviewed", private_key_path=k2)
+    sign_run(
+        run_dir=run_dir, signer_id="analyst@example.com", meaning="authored", private_key_path=k1
+    )
+    sign_run(
+        run_dir=run_dir, signer_id="approver@example.com", meaning="reviewed", private_key_path=k2
+    )
 
     sigs = load_signatures(run_dir)
     assert len(sigs) == 2
@@ -168,7 +170,12 @@ def test_verify_all_signatures_pass(tmp_path: Path) -> None:
     kp = generate_keypair()
     key_path = _write_key(tmp_path, kp)
 
-    sign_run(run_dir=run_dir, signer_id="analyst@example.com", meaning="authored", private_key_path=key_path)
+    sign_run(
+        run_dir=run_dir,
+        signer_id="analyst@example.com",
+        meaning="authored",
+        private_key_path=key_path,
+    )
 
     ok, failures = verify_all_signatures(run_dir)
     assert ok
@@ -185,10 +192,16 @@ def test_verify_all_signatures_fail(tmp_path: Path) -> None:
     kp = generate_keypair()
     key_path = _write_key(tmp_path, kp)
 
-    sign_run(run_dir=run_dir, signer_id="analyst@example.com", meaning="authored", private_key_path=key_path)
+    sign_run(
+        run_dir=run_dir,
+        signer_id="analyst@example.com",
+        meaning="authored",
+        private_key_path=key_path,
+    )
 
     # Corrupt the signature hex in signatures.jsonl
     import json
+
     sig_file = run_dir / "signatures.jsonl"
     lines = sig_file.read_text().splitlines()
     data = json.loads(lines[0])

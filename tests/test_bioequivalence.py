@@ -24,7 +24,6 @@ warnings.filterwarnings("ignore", category=FutureWarning, module="statsmodels")
 
 from pkplugin.nca.bioequivalence import BEResult, run_bioequivalence
 
-
 # ---------------------------------------------------------------------------
 # Synthetic data generator
 # ---------------------------------------------------------------------------
@@ -69,9 +68,7 @@ def make_2x2_crossover_data(
     mu_test = mu_ref + np.log(gmr)
 
     rows = []
-    for seq_idx, (seq_label, order) in enumerate(
-        [("TR", ["T", "R"]), ("RT", ["R", "T"])]
-    ):
+    for seq_idx, (seq_label, order) in enumerate([("TR", ["T", "R"]), ("RT", ["R", "T"])]):
         for i in range(n_per_sequence):
             subj_id = f"S{seq_idx * n_per_sequence + i + 1:03d}"
             # between-subject random effect
@@ -113,7 +110,7 @@ def make_parallel_data(
     for i in range(n_per_arm):
         rows.append(
             {
-                "subject_id": f"T{i+1:03d}",
+                "subject_id": f"T{i + 1:03d}",
                 "treatment": "T",
                 "period": 1,
                 "sequence": "T",
@@ -123,7 +120,7 @@ def make_parallel_data(
     for i in range(n_per_arm):
         rows.append(
             {
-                "subject_id": f"R{i+1:03d}",
+                "subject_id": f"R{i + 1:03d}",
                 "treatment": "R",
                 "period": 1,
                 "sequence": "R",
@@ -251,7 +248,7 @@ def test_nonpositive_rows_raise_by_default() -> None:
 def test_be_not_demonstrated_wide_ci() -> None:
     """Large GMR (1.35) or high CV should push CI outside the BE window."""
     df = make_2x2_crossover_data(
-        n_per_sequence=6,      # small N → wide CI
+        n_per_sequence=6,  # small N → wide CI
         gmr=1.35,
         within_subject_cv_pct=40.0,
         seed=99,
@@ -275,14 +272,12 @@ def test_sequence_effect_detected() -> None:
         n_per_sequence=20,
         gmr=1.0,
         within_subject_cv_pct=15.0,
-        seq_effect=0.8,   # large log-scale sequence effect
+        seq_effect=0.8,  # large log-scale sequence effect
         seed=10,
     )
     result = run_bioequivalence(df, "AUC0_t", design="crossover_2x2")
 
-    assert "sequence" in result.anova_table, (
-        f"ANOVA table missing 'sequence': {result.anova_table}"
-    )
+    assert "sequence" in result.anova_table, f"ANOVA table missing 'sequence': {result.anova_table}"
     p_seq = result.anova_table["sequence"]["p"]
     assert p_seq < 0.05, f"Expected sequence p < 0.05, got p={p_seq:.4f}"
 
@@ -303,9 +298,7 @@ def test_period_effect_detected() -> None:
     )
     result = run_bioequivalence(df, "AUC0_t", design="crossover_2x2")
 
-    assert "period" in result.anova_table, (
-        f"ANOVA table missing 'period': {result.anova_table}"
-    )
+    assert "period" in result.anova_table, f"ANOVA table missing 'period': {result.anova_table}"
     p_per = result.anova_table["period"]["p"]
     assert p_per < 0.05, f"Expected period p < 0.05, got p={p_per:.4f}"
 
@@ -359,14 +352,10 @@ def test_explicit_labels_override_autodetection() -> None:
 def test_be_window_custom() -> None:
     """Custom BE window (90, 111) should be stored and used for decision."""
     df = make_2x2_crossover_data(n_per_sequence=12, gmr=1.0, seed=42)
-    result = run_bioequivalence(
-        df, "AUC0_t", design="crossover_2x2", be_window=(90.0, 111.0)
-    )
+    result = run_bioequivalence(df, "AUC0_t", design="crossover_2x2", be_window=(90.0, 111.0))
     assert result.be_window == (90.0, 111.0)
     # With GMR=1 and tight window the decision should match CI containment
-    expected = (
-        90.0 <= result.ci_90_low_pct and result.ci_90_high_pct <= 111.0
-    )
+    expected = result.ci_90_low_pct >= 90.0 and result.ci_90_high_pct <= 111.0
     assert result.be_demonstrated == expected
 
 
@@ -411,9 +400,7 @@ def test_gmr_direction_t_greater_than_r() -> None:
     n = 14  # 14 per sequence = 28 total
 
     rows = []
-    for seq_idx, (seq_label, order) in enumerate(
-        [("TR", ["T", "R"]), ("RT", ["R", "T"])]
-    ):
+    for seq_idx, (seq_label, order) in enumerate([("TR", ["T", "R"]), ("RT", ["R", "T"])]):
         for i in range(n):
             subj_id = f"S{seq_idx * n + i + 1:03d}"
             b_i = rng.normal(0.0, sigma_b)
@@ -422,13 +409,15 @@ def test_gmr_direction_t_greater_than_r() -> None:
                 mu = math.log(2.0) if trt == "T" else 0.0
                 eps = rng.normal(0.0, sigma_w)
                 ln_y = mu + b_i + eps
-                rows.append({
-                    "subject_id": subj_id,
-                    "sequence": seq_label,
-                    "period": period_num,
-                    "treatment": trt,
-                    "AUC0_t": math.exp(ln_y),
-                })
+                rows.append(
+                    {
+                        "subject_id": subj_id,
+                        "sequence": seq_label,
+                        "period": period_num,
+                        "treatment": trt,
+                        "AUC0_t": math.exp(ln_y),
+                    }
+                )
 
     df = pd.DataFrame(rows)
     result = run_bioequivalence(

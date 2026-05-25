@@ -14,7 +14,6 @@ import pytest
 from pkplugin.pd.fitting import PDFitResult, fit_pd_model
 from pkplugin.pd.predict import predict_pd
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -43,7 +42,7 @@ def _make_sigmoid_emax_data(
     conc = np.linspace(0.0, 20.0 * EC50, n)
     times = np.arange(n, dtype=np.float64)
     c_g = np.power(conc, gamma)
-    ec50_g = EC50 ** gamma
+    ec50_g = EC50**gamma
     effects = E0 + Emax * c_g / (ec50_g + c_g)
     return times, conc, effects
 
@@ -87,8 +86,7 @@ def test_fit_emax_noiseless_recovery() -> None:
         est = result.parameters[name]
         rel_err = abs(est - true_val) / (abs(true_val) + 1e-10)
         assert rel_err < 1e-4, (
-            f"Emax fit: {name} relative error {rel_err:.2e} > 1e-4 "
-            f"(est={est:.6f}, true={true_val})"
+            f"Emax fit: {name} relative error {rel_err:.2e} > 1e-4 (est={est:.6f}, true={true_val})"
         )
 
 
@@ -115,9 +113,7 @@ def test_fit_sigmoid_emax_recovers_gamma() -> None:
     for name, true_val in true.items():
         est = result.parameters[name]
         rel_err = abs(est - true_val) / (abs(true_val) + 1e-10)
-        assert rel_err < 1e-3, (
-            f"Sigmoid Emax: {name} rel_err={rel_err:.2e} > 1e-3"
-        )
+        assert rel_err < 1e-3, f"Sigmoid Emax: {name} rel_err={rel_err:.2e} > 1e-3"
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +141,7 @@ def test_fit_effect_compartment_recovers_ke0() -> None:
     assert result.diagnostics.converged
     ke0_est = result.parameters["ke0"]
     rel_err = abs(ke0_est - true_params["ke0"]) / true_params["ke0"]
-    assert rel_err < 0.01, (
-        f"Effect compartment: ke0 rel_err={rel_err:.2e} > 1e-2"
-    )
+    assert rel_err < 0.01, f"Effect compartment: ke0 rel_err={rel_err:.2e} > 1e-2"
 
 
 # ---------------------------------------------------------------------------
@@ -174,9 +168,7 @@ def test_fit_idr_i_recovers_params() -> None:
         true_val = true_params[name]
         est = result.parameters[name]
         rel_err = abs(est - true_val) / (abs(true_val) + 1e-10)
-        assert rel_err < 0.05, (
-            f"IDR-I: {name} rel_err={rel_err:.2e} > 5e-2"
-        )
+        assert rel_err < 0.05, f"IDR-I: {name} rel_err={rel_err:.2e} > 5e-2"
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +178,7 @@ def test_fit_idr_i_recovers_params() -> None:
 
 def test_sequential_mode_with_pk_fit_result(tmp_path: object) -> None:
     """Sequential fit: derive Cp(t) from a PK FitResult, then fit PD."""
-    from pkplugin.comp.fitting import FitResult, FitDiagnostics
+    from pkplugin.comp.fitting import FitDiagnostics, FitResult
 
     # Build a mock FitResult for 1-cmt IV bolus
     true_pk = {"V": 10.0, "k": 0.2}
@@ -203,9 +195,14 @@ def test_sequential_mode_with_pk_fit_result(tmp_path: object) -> None:
         residuals=np.zeros(len(times)),
         weighted_residuals=np.zeros(len(times)),
         diagnostics=FitDiagnostics(
-            n_obs=len(times), n_params_estimated=2,
-            rss=0.0, aic=0.0, bic=0.0,
-            condition_number=None, converged=True, method="lmfit/leastsq"
+            n_obs=len(times),
+            n_params_estimated=2,
+            rss=0.0,
+            aic=0.0,
+            bic=0.0,
+            condition_number=None,
+            converged=True,
+            method="lmfit/leastsq",
         ),
         weight_scheme="uniform",
         residual_error_model="additive",
@@ -213,6 +210,7 @@ def test_sequential_mode_with_pk_fit_result(tmp_path: object) -> None:
 
     # True concentrations from PK model
     from pkplugin.comp.analytic import predict as pk_predict
+
     conc = pk_predict("cmt1_iv_bolus", true_pk, times.tolist(), dose)
 
     # Generate noiseless Emax effect data

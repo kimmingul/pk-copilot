@@ -109,13 +109,13 @@ class CovariateRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     subject_id: str
-    age: float | None = None          # years
+    age: float | None = None  # years
     sex: Literal["M", "F", "U"] = "U"
-    weight: float | None = None       # kg
-    height: float | None = None       # cm
-    crcl: float | None = None         # mL/min (Cockcroft-Gault or reported)
-    egfr: float | None = None         # mL/min/1.73m²
-    bsa: float | None = None          # m²
+    weight: float | None = None  # kg
+    height: float | None = None  # cm
+    crcl: float | None = None  # mL/min (Cockcroft-Gault or reported)
+    egfr: float | None = None  # mL/min/1.73m²
+    bsa: float | None = None  # m²
     custom: dict[str, float | str] = Field(default_factory=dict)
 
 
@@ -139,9 +139,9 @@ class StudyDesign(BaseModel):
         "replicate_2x4",
         "higher_order",
     ]
-    tau: float | None = None          # dosing interval (hr) for multiple-dose
+    tau: float | None = None  # dosing interval (hr) for multiple-dose
     formulations: list[str] = Field(default_factory=list)  # ["Test", "Reference"]
-    sequences: list[str] = Field(default_factory=list)      # ["TR", "RT"]
+    sequences: list[str] = Field(default_factory=list)  # ["TR", "RT"]
     washout_hr: float | None = None
 
     @field_validator("tau")
@@ -175,9 +175,7 @@ class NCAConfig(BaseModel):
 
     winnonlin_version: Literal["5.3", "6.4", "8.3", "compat-latest"] = "6.4"
     auc_method: Literal["linear", "log", "linear_up_log_down"] | None = None
-    lambda_z_method: (
-        Literal["best_fit", "adj_r2", "manual", "time_range", "n_points"] | None
-    ) = None
+    lambda_z_method: Literal["best_fit", "adj_r2", "manual", "time_range", "n_points"] | None = None
     lambda_z_tolerance: float | None = None
     lambda_z_min_points: int = 3
     lambda_z_manual: dict[str, Any] | None = None
@@ -230,10 +228,10 @@ class NCAParameterRow(BaseModel):
     period: str | None = None
     treatment: str | None = None
     analyte: str = "parent"
-    parameter: str                   # "Cmax", "AUClast", "AUCinf", ...
+    parameter: str  # "Cmax", "AUClast", "AUCinf", ...
     value: float | None
     unit: str
-    method: str                      # e.g. "linear_up_log_down"
+    method: str  # e.g. "linear_up_log_down"
     winnonlin_version: str
     flags: list[str] = Field(default_factory=list)
     comment: str | None = None
@@ -252,19 +250,19 @@ class LambdaZResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    lambda_z: float                    # hr⁻¹
-    half_life: float                   # hr  (ln2 / lambda_z)
+    lambda_z: float  # hr⁻¹
+    half_life: float  # hr  (ln2 / lambda_z)
     r_squared: float
     adj_r_squared: float
     n_points: int
-    time_first: float                  # first time point used in regression (hr)
-    time_last: float                   # last time point used in regression (hr)
-    span_ratio: float                  # (time_last - time_first) / half_life
-    intercept: float                   # back-extrapolated C0 from regression line
+    time_first: float  # first time point used in regression (hr)
+    time_last: float  # last time point used in regression (hr)
+    span_ratio: float  # (time_last - time_first) / half_life
+    intercept: float  # back-extrapolated C0 from regression line
     flags: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def _span_ratio_consistent(self) -> "LambdaZResult":
+    def _span_ratio_consistent(self) -> LambdaZResult:
         if self.lambda_z <= 0:
             raise ValueError(f"lambda_z must be > 0, got {self.lambda_z}")
         return self
@@ -278,10 +276,10 @@ class AUCResult(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    auc_last: float                    # AUC from t=0 to last quantifiable (ng·hr/mL)
-    auc_inf: float | None = None       # AUC extrapolated to infinity
+    auc_last: float  # AUC from t=0 to last quantifiable (ng·hr/mL)
+    auc_inf: float | None = None  # AUC extrapolated to infinity
     auc_extrap_pct: float | None = None  # % extrapolated beyond last point
-    aumc_last: float | None = None     # AUMC to last quantifiable
-    aumc_inf: float | None = None      # AUMC extrapolated to infinity
-    method: str                        # "linear", "log", "linear_up_log_down"
+    aumc_last: float | None = None  # AUMC to last quantifiable
+    aumc_inf: float | None = None  # AUMC extrapolated to infinity
+    method: str  # "linear", "log", "linear_up_log_down"
     flags: list[str] = Field(default_factory=list)

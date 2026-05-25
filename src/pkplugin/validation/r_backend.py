@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-
 # ---------------------------------------------------------------------------
 # Status probe
 # ---------------------------------------------------------------------------
@@ -224,9 +223,7 @@ def run_r_pknca(
             timeout=timeout_sec,
         )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"run_r_pknca.R timed out after {timeout_sec}s"
-        ) from exc
+        raise RuntimeError(f"run_r_pknca.R timed out after {timeout_sec}s") from exc
 
     return RNCAResult(
         backend="PKNCA",
@@ -296,9 +293,7 @@ def run_r_noncompart(
             timeout=timeout_sec,
         )
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(
-            f"run_r_noncompart.R timed out after {timeout_sec}s"
-        ) from exc
+        raise RuntimeError(f"run_r_noncompart.R timed out after {timeout_sec}s") from exc
 
     return RNCAResult(
         backend="NonCompart",

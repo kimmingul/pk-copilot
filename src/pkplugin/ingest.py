@@ -26,7 +26,6 @@ import pandas as pd
 
 from pkplugin.schemas import ConcentrationRecord, DoseRecord
 
-
 # ---------------------------------------------------------------------------
 # Constants — BLOQ recognition
 # ---------------------------------------------------------------------------
@@ -78,10 +77,10 @@ class IngestReport:
     n_subjects: int
     n_bloq: int
     lloq_candidates: list[float]
-    inferred_units: dict[str, str]          # {"time": "hr", "concentration": "ng/mL"}
+    inferred_units: dict[str, str]  # {"time": "hr", "concentration": "ng/mL"}
     column_mapping: ColumnMapping
     warnings: list[str]
-    raw_bloq_patterns_seen: list[str]       # e.g. ["<0.5", "BLQ", "NQ"]
+    raw_bloq_patterns_seen: list[str]  # e.g. ["<0.5", "BLQ", "NQ"]
 
 
 # ---------------------------------------------------------------------------
@@ -138,15 +137,35 @@ def detect_bloq_pattern(value: Any) -> tuple[bool, float | None, str | None]:
 
 # Candidate lists are ordered by priority (first match wins).
 _SUBJECT_CANDIDATES = [
-    "usubjid", "subjid", "subject_id", "subjectid", "id",
-    "대상자", "환자", "subject",
+    "usubjid",
+    "subjid",
+    "subject_id",
+    "subjectid",
+    "id",
+    "대상자",
+    "환자",
+    "subject",
 ]
 _TIME_CANDIDATES = [
-    "time_hr", "timeh", "time", "t", "시간(hr)", "시간", "hours", "hr",
+    "time_hr",
+    "timeh",
+    "time",
+    "t",
+    "시간(hr)",
+    "시간",
+    "hours",
+    "hr",
 ]
 _CONC_CANDIDATES = [
-    "conc_ng_per_ml", "concentration", "conc", "ng_per_ml", "value",
-    "농도(ng/ml)", "농도(ng/ml)", "농도", "농도(ng/mL)",
+    "conc_ng_per_ml",
+    "concentration",
+    "conc",
+    "ng_per_ml",
+    "value",
+    "농도(ng/ml)",
+    "농도(ng/ml)",
+    "농도",
+    "농도(ng/mL)",
 ]
 _ANALYTE_CANDIDATES = ["analyte_id", "analyte"]
 _PERIOD_CANDIDATES = ["period", "per", "visit"]
@@ -155,9 +174,7 @@ _SEQUENCE_CANDIDATES = ["sequence", "seq", "group"]
 _BLOQ_FLAG_CANDIDATES = ["bloq", "blq", "bql"]
 
 
-def _match_column(
-    columns_lower: dict[str, str], candidates: list[str]
-) -> str | None:
+def _match_column(columns_lower: dict[str, str], candidates: list[str]) -> str | None:
     """Return the first column whose lowercased name matches a candidate."""
     for cand in candidates:
         if cand in columns_lower:
@@ -240,8 +257,17 @@ _TIME_UNIT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
 _CONC_UNIT_PATTERNS: list[tuple[re.Pattern[str], str]] = [
     # ng/mL — slash, underscore, or "per" separator; also parenthesised suffix
     (re.compile(r"ng[/_]?(?:per[_]?)?m[lL]|\(ng[/_]m[lL]\)|ng_per_ml", re.IGNORECASE), "ng/mL"),
-    (re.compile(r"ug[/_]?(?:per[_]?)?[lL]|mcg[/_]?(?:per[_]?)?[lL]|\(ug[/_][lL]\)|ug_per_[lL]", re.IGNORECASE), "ug/L"),
-    (re.compile(r"ug[/_]?(?:per[_]?)?m[lL]|mcg[/_]?(?:per[_]?)?m[lL]|ug_per_ml", re.IGNORECASE), "ug/mL"),
+    (
+        re.compile(
+            r"ug[/_]?(?:per[_]?)?[lL]|mcg[/_]?(?:per[_]?)?[lL]|\(ug[/_][lL]\)|ug_per_[lL]",
+            re.IGNORECASE,
+        ),
+        "ug/L",
+    ),
+    (
+        re.compile(r"ug[/_]?(?:per[_]?)?m[lL]|mcg[/_]?(?:per[_]?)?m[lL]|ug_per_ml", re.IGNORECASE),
+        "ug/mL",
+    ),
     (re.compile(r"nmol[/_]?[lL]", re.IGNORECASE), "nmol/L"),
     (re.compile(r"umol[/_]?[lL]", re.IGNORECASE), "umol/L"),
 ]
@@ -263,9 +289,7 @@ def _match_unit(
     return None
 
 
-def infer_units(
-    columns: list[str], column_mapping: ColumnMapping
-) -> dict[str, str]:
+def infer_units(columns: list[str], column_mapping: ColumnMapping) -> dict[str, str]:
     """Attempt to infer time/concentration/dose units from column-name suffixes.
 
     Recognises patterns like ``"time_hr"``, ``"conc_ng_per_ml"``,
@@ -291,7 +315,9 @@ def infer_units(
         result["concentration"] = conc_unit
 
     # Scan all columns for a dose column and try to infer its unit.
-    dose_candidates = [c for c in columns if re.search(r"dose|amt|amount|용량|투여", c, re.IGNORECASE)]
+    dose_candidates = [
+        c for c in columns if re.search(r"dose|amt|amount|용량|투여", c, re.IGNORECASE)
+    ]
     for dc in dose_candidates:
         dose_unit = _match_unit(dc, _DOSE_UNIT_PATTERNS)
         if dose_unit:
@@ -353,10 +379,7 @@ def load_dataset(
             engine="openpyxl",
         )
     else:
-        raise ValueError(
-            f"Unsupported file extension: {ext!r}. "
-            "Expected .csv, .tsv, or .xlsx."
-        )
+        raise ValueError(f"Unsupported file extension: {ext!r}. Expected .csv, .tsv, or .xlsx.")
 
     # Strip column whitespace
     raw_df.columns = [str(c).strip() for c in raw_df.columns]
@@ -401,8 +424,7 @@ def load_dataset(
             time_val: float = float(str(row.get(mapping.time, "")).strip())
         except (ValueError, TypeError):
             warnings.append(
-                f"Row {idx}: could not parse time value "
-                f"{row.get(mapping.time)!r} — row skipped."
+                f"Row {idx}: could not parse time value {row.get(mapping.time)!r} — row skipped."
             )
             continue
 
@@ -412,7 +434,9 @@ def load_dataset(
                 "time": time_val,
                 "concentration": conc_float,
                 "bloq": is_bloq,
-                "raw_concentration": str(raw_conc_val).strip() if raw_conc_val is not None else None,
+                "raw_concentration": str(raw_conc_val).strip()
+                if raw_conc_val is not None
+                else None,
                 "analyte": (
                     str(row[mapping.analyte]).strip()
                     if mapping.analyte and mapping.analyte in row.index
@@ -441,8 +465,15 @@ def load_dataset(
     if out_df.empty:
         out_df = pd.DataFrame(
             columns=[
-                "subject_id", "time", "concentration", "bloq",
-                "raw_concentration", "analyte", "period", "treatment", "sequence",
+                "subject_id",
+                "time",
+                "concentration",
+                "bloq",
+                "raw_concentration",
+                "analyte",
+                "period",
+                "treatment",
+                "sequence",
             ]
         )
     else:
@@ -474,8 +505,8 @@ def load_dataset(
     # NOT converted here — a warning is emitted and original values are kept.
     # Dose unit is handled per-DoseRecord, not here.
     from pkplugin.units import (
-        to_canonical_time,
         to_canonical_concentration,
+        to_canonical_time,
     )
 
     t_unit_raw = inferred_units.get("time")
@@ -485,9 +516,7 @@ def load_dataset(
     if t_unit_raw and t_unit_raw not in {"hr", "h", "hour"}:
         try:
             out_df["time"] = out_df["time"].apply(
-                lambda v: to_canonical_time(float(v), t_unit_raw)
-                if pd.notna(v)
-                else v
+                lambda v: to_canonical_time(float(v), t_unit_raw) if pd.notna(v) else v
             )
             conversions_applied["time"] = f"{t_unit_raw} -> hour"
         except Exception as exc:  # noqa: BLE001 — surface to user via warnings
@@ -507,13 +536,9 @@ def load_dataset(
         elif c_unit_raw != "ng/mL":
             try:
                 out_df["concentration"] = out_df["concentration"].apply(
-                    lambda v: to_canonical_concentration(float(v), c_unit_raw)
-                    if pd.notna(v)
-                    else v
+                    lambda v: to_canonical_concentration(float(v), c_unit_raw) if pd.notna(v) else v
                 )
-                conversions_applied["concentration"] = (
-                    f"{c_unit_raw} -> ng/mL"
-                )
+                conversions_applied["concentration"] = f"{c_unit_raw} -> ng/mL"
             except Exception as exc:  # noqa: BLE001
                 warnings.append(
                     f"concentration unit conversion failed "
@@ -567,9 +592,7 @@ def to_concentration_records(df: pd.DataFrame) -> list[ConcentrationRecord]:
                 subject_id=str(row["subject_id"]),
                 time=time_val,
                 concentration=(
-                    float(row["concentration"])
-                    if pd.notna(row.get("concentration"))
-                    else None
+                    float(row["concentration"]) if pd.notna(row.get("concentration")) else None
                 ),
                 analyte=str(row["analyte"]) if pd.notna(row.get("analyte")) else "parent",
                 period=str(row["period"]) if pd.notna(row.get("period")) else None,
@@ -617,7 +640,9 @@ def to_dose_records(df: pd.DataFrame) -> list[DoseRecord]:
                 if "infusion_duration" in row.index and pd.notna(row["infusion_duration"])
                 else None
             ),
-            period=str(row["period"]) if "period" in row.index and pd.notna(row["period"]) else None,
+            period=str(row["period"])
+            if "period" in row.index and pd.notna(row["period"])
+            else None,
             treatment=(
                 str(row["treatment"])
                 if "treatment" in row.index and pd.notna(row["treatment"])

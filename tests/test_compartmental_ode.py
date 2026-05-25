@@ -12,10 +12,8 @@ from __future__ import annotations
 import math
 
 import numpy as np
-import pytest
 
 from pkplugin.comp.ode import DosingEvent, simulate_ode, simulate_ode_with_tlag
-
 
 # ---------------------------------------------------------------------------
 # Helpers — inline analytical formulas
@@ -84,7 +82,7 @@ def _cmt2_iv_bolus_analytical(
     """
     sum_ab = k10 + k12 + k21
     prod_ab = k10 * k21
-    disc = math.sqrt(max(sum_ab ** 2 - 4.0 * prod_ab, 0.0))
+    disc = math.sqrt(max(sum_ab**2 - 4.0 * prod_ab, 0.0))
     alpha = (sum_ab + disc) / 2.0
     beta = (sum_ab - disc) / 2.0
 
@@ -126,9 +124,7 @@ def test_cmt1_iv_infusion_vs_analytical() -> None:
     times = np.array([0.5, 1.0, 2.0, 2.5, 4.0, 8.0, 12.0])
     dosing = [DosingEvent(time=0.0, amount=dose, route="iv_infusion", infusion_duration=t_inf)]
 
-    ode_conc = simulate_ode(
-        "cmt1_iv_infusion", {"V": V, "k": k}, dosing, times
-    )
+    ode_conc = simulate_ode("cmt1_iv_infusion", {"V": V, "k": k}, dosing, times)
     ref_conc = _cmt1_iv_infusion_analytical(times, dose, V, k, t_inf)
 
     np.testing.assert_allclose(ode_conc, ref_conc, rtol=1e-7, atol=1e-10)
@@ -245,9 +241,7 @@ def test_mm_saturation_vs_linear_regime() -> None:
     # High dose: Km << C initially → MM saturated → slower first-order apparent
     high_dose = 5000.0
     dosing_high = [DosingEvent(time=0.0, amount=high_dose, route="iv_bolus")]
-    c_high = simulate_ode(
-        "cmt1_iv_mm", {"V": V, "Vmax": Vmax, "Km": Km}, dosing_high, times
-    )
+    c_high = simulate_ode("cmt1_iv_mm", {"V": V, "Vmax": Vmax, "Km": Km}, dosing_high, times)
 
     # In linear regime (C << Km), dA/dt = -Vmax*(A/V)/Km * V = -Vmax/Km * A
     # so apparent k_eff = Vmax / Km  [hr⁻¹] (NOT divided by V)
@@ -259,8 +253,13 @@ def test_mm_saturation_vs_linear_regime() -> None:
         "cmt1_iv_mm", {"V": V, "Vmax": Vmax, "Km": Km}, dosing_very_low, times
     )
     ref_very_low = (very_low_dose / V) * np.exp(-k_eff * times)
-    np.testing.assert_allclose(c_very_low, ref_very_low, rtol=1e-4, atol=1e-12,
-                               err_msg="Very-low-dose MM should approximate linear elimination")
+    np.testing.assert_allclose(
+        c_very_low,
+        ref_very_low,
+        rtol=1e-4,
+        atol=1e-12,
+        err_msg="Very-low-dose MM should approximate linear elimination",
+    )
 
     # High dose should show slower decline early (saturation effect)
     # At t=2 vs t=1: decay ratio for high dose should be smaller loss than linear
@@ -295,9 +294,7 @@ def test_cmt1_po_tlag_zero_before_lag() -> None:
 
     # After tlag, concentrations should be positive
     post_lag_mask = times > tlag + 0.1
-    assert np.all(conc[post_lag_mask] > 0.0), (
-        "Expected positive concentrations after tlag"
-    )
+    assert np.all(conc[post_lag_mask] > 0.0), "Expected positive concentrations after tlag"
 
 
 # ---------------------------------------------------------------------------
@@ -316,10 +313,8 @@ def test_solvers_agree() -> None:
     c_bdf = simulate_ode("cmt1_iv_bolus", params, dosing, times, method="BDF")
     c_rk45 = simulate_ode("cmt1_iv_bolus", params, dosing, times, method="RK45")
 
-    np.testing.assert_allclose(c_lsoda, c_bdf, rtol=1e-6, atol=1e-9,
-                               err_msg="LSODA vs BDF")
-    np.testing.assert_allclose(c_lsoda, c_rk45, rtol=1e-6, atol=1e-9,
-                               err_msg="LSODA vs RK45")
+    np.testing.assert_allclose(c_lsoda, c_bdf, rtol=1e-6, atol=1e-9, err_msg="LSODA vs BDF")
+    np.testing.assert_allclose(c_lsoda, c_rk45, rtol=1e-6, atol=1e-9, err_msg="LSODA vs RK45")
 
 
 # ---------------------------------------------------------------------------

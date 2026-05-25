@@ -19,7 +19,6 @@ import pytest
 from pkplugin.pd.fitting import PDFitResult, fit_pd_model
 from pkplugin.pd.predict import predict_pd
 
-
 # ---------------------------------------------------------------------------
 # Golden 1 — Emax on warfarin-style INR data
 # ---------------------------------------------------------------------------
@@ -37,9 +36,7 @@ _WARFARIN_TIMES = np.arange(len(_WARFARIN_CONC), dtype=np.float64)
 @pytest.fixture(scope="module")
 def fit_warfarin_emax() -> PDFitResult:
     params = _WARFARIN_PD_TRUE
-    effects = params["E0"] + params["Emax"] * _WARFARIN_CONC / (
-        params["EC50"] + _WARFARIN_CONC
-    )
+    effects = params["E0"] + params["Emax"] * _WARFARIN_CONC / (params["EC50"] + _WARFARIN_CONC)
     return fit_pd_model(
         times=_WARFARIN_TIMES,
         observed_effects=effects,
@@ -87,9 +84,7 @@ _PROPOFOL_CONC = 10.0 * np.exp(-0.3 * _PROPOFOL_TIMES)
 
 @pytest.fixture(scope="module")
 def fit_propofol_effect_compartment() -> PDFitResult:
-    effects = predict_pd(
-        "effect_compartment", _PROPOFOL_PD_TRUE, _PROPOFOL_CONC, _PROPOFOL_TIMES
-    )
+    effects = predict_pd("effect_compartment", _PROPOFOL_PD_TRUE, _PROPOFOL_CONC, _PROPOFOL_TIMES)
     return fit_pd_model(
         times=_PROPOFOL_TIMES,
         observed_effects=effects,
@@ -140,9 +135,7 @@ _CORTISOL_CONC = np.where(_CORTISOL_TIMES < 24.0, 0.5, 0.0).astype(np.float64)
 
 @pytest.fixture(scope="module")
 def fit_cortisol_idr_i() -> PDFitResult:
-    effects = predict_pd(
-        "idr_i", _CORTISOL_PD_TRUE, _CORTISOL_CONC, _CORTISOL_TIMES
-    )
+    effects = predict_pd("idr_i", _CORTISOL_PD_TRUE, _CORTISOL_CONC, _CORTISOL_TIMES)
     return fit_pd_model(
         times=_CORTISOL_TIMES,
         observed_effects=effects,

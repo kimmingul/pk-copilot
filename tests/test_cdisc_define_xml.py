@@ -16,10 +16,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import pytest
-
 from pkplugin.cdisc.define_xml import generate_define_xml
-from pkplugin.cdisc.paramcd import PARAMCD_REGISTRY
 
 
 class TestGenerateDefineXml:

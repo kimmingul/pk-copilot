@@ -154,9 +154,7 @@ def run_bioequivalence(
 
     _validate_columns(parameters, endpoint, design)
 
-    test_label, reference_label = _resolve_labels(
-        parameters, test_label, reference_label
-    )
+    test_label, reference_label = _resolve_labels(parameters, test_label, reference_label)
 
     warn: list[str] = []
     df_work = _prepare_data(
@@ -182,7 +180,7 @@ def run_bioequivalence(
             warnings=warn,
             n_subjects_total=n_subjects,
         )
-    elif design == "parallel":
+    if design == "parallel":
         return _parallel(
             df_work,
             endpoint=endpoint,
@@ -193,11 +191,9 @@ def run_bioequivalence(
             warnings=warn,
             n_subjects_total=n_subjects,
         )
-    else:
-        raise ValueError(
-            f"Design {design!r} is not implemented in v0.2. "
-            "Use 'crossover_2x2' or 'parallel'."
-        )
+    raise ValueError(
+        f"Design {design!r} is not implemented in v0.2. Use 'crossover_2x2' or 'parallel'."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -205,9 +201,7 @@ def run_bioequivalence(
 # ---------------------------------------------------------------------------
 
 
-def _validate_columns(
-    parameters: pd.DataFrame, endpoint: str, design: BEDesign
-) -> None:
+def _validate_columns(parameters: pd.DataFrame, endpoint: str, design: BEDesign) -> None:
     """Raise ValueError if required columns are absent."""
     required = {"subject_id", "treatment", endpoint}
     if design == "crossover_2x2":
@@ -252,8 +246,7 @@ def _resolve_labels(
             )
         if test_label is not None:
             return test_label, others[0]
-        else:
-            return others[0], reference_label  # type: ignore[return-value]
+        return others[0], reference_label  # type: ignore[return-value]
 
     # Neither provided: attempt known-pair match.
     if len(unique_vals) != 2:
@@ -294,16 +287,12 @@ def _prepare_data(
     After drop, the 2x2 crossover design completers requirement is
     re-validated.
     """
-    df = parameters.loc[
-        parameters["treatment"].isin([test_label, reference_label])
-    ].copy()
+    df = parameters.loc[parameters["treatment"].isin([test_label, reference_label])].copy()
 
     # Drop NaN first.
     n_na = int(df[endpoint].isna().sum())
     if n_na > 0:
-        warnings_out.append(
-            f"{n_na} row(s) with missing {endpoint!r} dropped."
-        )
+        warnings_out.append(f"{n_na} row(s) with missing {endpoint!r} dropped.")
         df = df.dropna(subset=[endpoint]).copy()
 
     mask_nonpos = df[endpoint] <= 0
@@ -317,8 +306,7 @@ def _prepare_data(
                 f"Offending rows:\n{bad_rows.to_string(index=False)}"
             )
         warnings_out.append(
-            f"{n_bad} row(s) with non-positive {endpoint!r} dropped before "
-            "log-transformation."
+            f"{n_bad} row(s) with non-positive {endpoint!r} dropped before log-transformation."
         )
         df = df.loc[~mask_nonpos].copy()
 
@@ -388,10 +376,7 @@ def _crossover_2x2(
     # Use C(treatment, Treatment(reference=reference_label)) so statsmodels
     # always encodes the coefficient as Test - Reference unambiguously.
     # -----------------------------------------------------------------------
-    formula = (
-        f"ln_y ~ sequence + period + "
-        f"C(treatment, Treatment(reference='{reference_label}'))"
-    )
+    formula = f"ln_y ~ sequence + period + C(treatment, Treatment(reference='{reference_label}'))"
 
     fit_warnings: list[str] = []
     result = None
@@ -428,12 +413,12 @@ def _crossover_2x2(
             "BE conclusion is unreliable (be_demonstrated=None)."
         )
         # Return a result with be_demonstrated=None to signal unreliability.
-        _arr_test_nc: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-            df.loc[df["treatment"] == test_label, "ln_y"].to_numpy(dtype=float)
-        )
-        _arr_ref_nc: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-            df.loc[df["treatment"] == reference_label, "ln_y"].to_numpy(dtype=float)
-        )
+        _arr_test_nc: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+            df["treatment"] == test_label, "ln_y"
+        ].to_numpy(dtype=float)
+        _arr_ref_nc: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+            df["treatment"] == reference_label, "ln_y"
+        ].to_numpy(dtype=float)
         _diff_nc = float(np.mean(_arr_test_nc) - np.mean(_arr_ref_nc))
         return BEResult(
             design="crossover_2x2",
@@ -492,8 +477,7 @@ def _crossover_2x2(
         # H3: Check SE is finite.
         if not math.isfinite(se_diff) or se_diff <= 0:
             warnings.append(
-                f"Treatment SE is not finite ({se_diff}); "
-                "BE conclusion may be unreliable."
+                f"Treatment SE is not finite ({se_diff}); BE conclusion may be unreliable."
             )
 
         # H1: Use df = n_completers - 2 for balanced complete 2x2 crossover.
@@ -511,12 +495,12 @@ def _crossover_2x2(
     # For balanced 2x2, these equal the model LSMeans. For imbalanced data,
     # a warning is emitted and raw means are used as approximation.
     # -----------------------------------------------------------------------
-    _arr_test: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == test_label, "ln_y"].to_numpy(dtype=float)
-    )
-    _arr_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == reference_label, "ln_y"].to_numpy(dtype=float)
-    )
+    _arr_test: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == test_label, "ln_y"
+    ].to_numpy(dtype=float)
+    _arr_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == reference_label, "ln_y"
+    ].to_numpy(dtype=float)
     n_test_per_seq = df[df["treatment"] == test_label].groupby("sequence").size()
     n_ref_per_seq = df[df["treatment"] == reference_label].groupby("sequence").size()
     if n_test_per_seq.std() > 0 or n_ref_per_seq.std() > 0:
@@ -548,9 +532,7 @@ def _crossover_2x2(
     # -----------------------------------------------------------------------
     anova_tbl: dict[str, dict[str, float]] = {}
     try:
-        ols_model = smf.ols(
-            "ln_y ~ sequence + period + treatment", data=df
-        ).fit()
+        ols_model = smf.ols("ln_y ~ sequence + period + treatment", data=df).fit()
         at = anova_lm(ols_model, typ=2)
         for term in ("sequence", "period", "treatment"):
             if term in at.index:
@@ -599,12 +581,12 @@ def _parallel(
     n_subjects_total: int,
 ) -> BEResult:
     """Welch t-test on log-transformed endpoint for parallel design."""
-    y_test: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == test_label, "ln_y"].to_numpy(dtype=float)
-    )
-    y_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == reference_label, "ln_y"].to_numpy(dtype=float)
-    )
+    y_test: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == test_label, "ln_y"
+    ].to_numpy(dtype=float)
+    y_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == reference_label, "ln_y"
+    ].to_numpy(dtype=float)
 
     n_test = len(y_test)
     n_ref = len(y_ref)
@@ -688,21 +670,18 @@ def _manual_contrast(
 
     Used as fallback when the statsmodels coefficient cannot be located.
     """
-    y_test: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == test_label, "ln_y"].to_numpy(dtype=float)
-    )
-    y_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = (
-        df.loc[df["treatment"] == reference_label, "ln_y"].to_numpy(dtype=float)
-    )
+    y_test: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == test_label, "ln_y"
+    ].to_numpy(dtype=float)
+    y_ref: np.ndarray[tuple[int], np.dtype[np.float64]] = df.loc[
+        df["treatment"] == reference_label, "ln_y"
+    ].to_numpy(dtype=float)
     n_t, n_r = len(y_test), len(y_ref)
     diff = float(np.mean(y_test) - np.mean(y_ref))
     var_t = float(np.var(y_test, ddof=1))
     var_r = float(np.var(y_ref, ddof=1))
     se = math.sqrt(var_t / n_t + var_r / n_r)
     num = (var_t / n_t + var_r / n_r) ** 2
-    denom = (
-        (var_t / n_t) ** 2 / (n_t - 1)
-        + (var_r / n_r) ** 2 / (n_r - 1)
-    )
+    denom = (var_t / n_t) ** 2 / (n_t - 1) + (var_r / n_r) ** 2 / (n_r - 1)
     df_val = num / denom if denom > 0 else float(n_t + n_r - 2)
     return diff, se, df_val

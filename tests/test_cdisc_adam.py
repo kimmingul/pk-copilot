@@ -26,7 +26,7 @@ from pkplugin.cdisc.adam import (
     build_adpp,
     write_adam_dataset,
 )
-from pkplugin.cdisc.sdtm import load_sdtm_dm, load_sdtm_ex, load_sdtm_pc, normalise_pc_times
+from pkplugin.cdisc.sdtm import load_sdtm_dm
 from pkplugin.nca.engine import NCAResult, calculate_nca
 from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
@@ -146,10 +146,21 @@ class TestBuildAdpc:
             assert subj_rows.iloc[0]["SEX"] == "M"
 
     def test_adpc_empty_input(self) -> None:
-        empty_df = pd.DataFrame(columns=[
-            "subject_id", "time", "concentration", "analyte", "matrix",
-            "bloq", "raw_concentration", "pctpt", "pctptnum", "pcdtc", "pcstresu",
-        ])
+        empty_df = pd.DataFrame(
+            columns=[
+                "subject_id",
+                "time",
+                "concentration",
+                "analyte",
+                "matrix",
+                "bloq",
+                "raw_concentration",
+                "pctpt",
+                "pctptnum",
+                "pcdtc",
+                "pcstresu",
+            ]
+        )
         adpc = build_adpc(empty_df)
         for col in ADPC_VARIABLES:
             assert col in adpc.columns

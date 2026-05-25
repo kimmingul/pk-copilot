@@ -15,10 +15,9 @@ from __future__ import annotations
 import base64
 from pathlib import Path
 
-import numpy as np
-import pytest
-
 import matplotlib
+import numpy as np
+
 matplotlib.use("Agg")
 
 
@@ -28,8 +27,8 @@ matplotlib.use("Agg")
 
 
 def _make_nca_results() -> list:
-    from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
     from pkplugin.nca.engine import calculate_nca
+    from pkplugin.schemas import ConcentrationRecord, DoseRecord, NCAConfig
 
     times = [0.0, 0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0]
     concs = [0.0, 4.0, 8.0, 6.0, 4.0, 2.5, 1.5, 0.5]
@@ -43,17 +42,31 @@ def _make_nca_results() -> list:
 
 def _make_be_result():
     import pandas as pd
+
     from pkplugin.nca.bioequivalence import run_bioequivalence
 
-    df = pd.DataFrame({
-        "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6",
-                        "S1", "S2", "S3", "S4", "S5", "S6"],
-        "period": ["1"] * 6 + ["2"] * 6,
-        "sequence": ["TR", "TR", "TR", "RT", "RT", "RT"] * 2,
-        "treatment": ["T", "T", "T", "R", "R", "R", "R", "R", "R", "T", "T", "T"],
-        "AUClast": [110.0, 105.0, 115.0, 100.0, 98.0, 102.0,
-                    95.0, 100.0, 105.0, 112.0, 108.0, 117.0],
-    })
+    df = pd.DataFrame(
+        {
+            "subject_id": ["S1", "S2", "S3", "S4", "S5", "S6", "S1", "S2", "S3", "S4", "S5", "S6"],
+            "period": ["1"] * 6 + ["2"] * 6,
+            "sequence": ["TR", "TR", "TR", "RT", "RT", "RT"] * 2,
+            "treatment": ["T", "T", "T", "R", "R", "R", "R", "R", "R", "T", "T", "T"],
+            "AUClast": [
+                110.0,
+                105.0,
+                115.0,
+                100.0,
+                98.0,
+                102.0,
+                95.0,
+                100.0,
+                105.0,
+                112.0,
+                108.0,
+                117.0,
+            ],
+        }
+    )
     return run_bioequivalence(df, endpoint="AUClast", design="crossover_2x2")
 
 
@@ -87,8 +100,16 @@ def test_render_html_report_contains_sections(tmp_path: Path) -> None:
         title="Section Test",
         metadata={},
         sections=[
-            {"heading": "First Section", "content_html": "<p>Section one content</p>", "plot_paths": []},
-            {"heading": "Second Section", "content_html": "<p>Section two content</p>", "plot_paths": []},
+            {
+                "heading": "First Section",
+                "content_html": "<p>Section one content</p>",
+                "plot_paths": [],
+            },
+            {
+                "heading": "Second Section",
+                "content_html": "<p>Section two content</p>",
+                "plot_paths": [],
+            },
         ],
         output_path=out,
     )
