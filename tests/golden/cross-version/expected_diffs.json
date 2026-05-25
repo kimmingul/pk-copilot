@@ -1,0 +1,174 @@
+{
+  "dataset": "synthetic_iv_bolus_no_t0",
+  "description": "Cross-version expected differences on the synthetic IV bolus dataset (S001, C0_true=100 ng/mL, k=0.15 1/h, dose=100 mg, no t=0 observation). All values engine-computed.",
+  "differences": [
+    {
+      "parameter": "C0",
+      "v5.3_value": 92.77434863285528,
+      "v6.4_value": 100.00000000000004,
+      "v8.3_value": 100.00000000000004,
+      "expected_to_differ": true,
+      "reason": "C0 method differs: v5.3 uses 'observed' (first quantifiable point = C(0.5h)), v6.4/v8.3 use 'log_back_extrap' (two-point back-extrapolation to t=0 recovering C0_true~100)"
+    },
+    {
+      "parameter": "AUClast",
+      "v5.3_value": 675.3244595950091,
+      "v6.4_value": 648.4508517018048,
+      "v8.3_value": 648.4508517018048,
+      "expected_to_differ": true,
+      "reason": "AUC method differs: v5.3 uses 'linear' trapezoid throughout; v6.4/v8.3 use 'linear_up_log_down'. For a purely declining exponential profile the log-down intervals underestimate relative to linear, giving a lower AUClast. Additionally the t=0 anchor differs (C0=92.77 vs 100.0)."
+    },
+    {
+      "parameter": "AUMClast",
+      "v5.3_value": 4339.086986230169,
+      "v6.4_value": 3885.8261188553524,
+      "v8.3_value": 3885.8261188553524,
+      "expected_to_differ": true,
+      "reason": "Same root causes as AUClast: different C0 anchor and different integration method affect the first moment."
+    },
+    {
+      "parameter": "AUCINF_obs",
+      "v5.3_value": 693.5402745598708,
+      "v6.4_value": 666.6666666666665,
+      "v8.3_value": 666.6666666666665,
+      "expected_to_differ": true,
+      "reason": "AUCINF_obs = AUClast + Clast/Lambda_z. AUClast differs between versions (linear vs linear_up_log_down + C0 anchor), so AUCINF_obs differs. v6.4/v8.3 converge to the true analytical value (100/0.15=666.67) because the log-down method is exact for exponential profiles."
+    },
+    {
+      "parameter": "AUMCINF_obs",
+      "v5.3_value": 4897.705311819262,
+      "v6.4_value": 4444.444444444445,
+      "v8.3_value": 4444.444444444445,
+      "expected_to_differ": true,
+      "reason": "Derived from AUMClast which differs by C0 and AUC method."
+    },
+    {
+      "parameter": "AUC_%Extrap_obs",
+      "v5.3_value": 2.6264970662910203,
+      "v6.4_value": 2.7323722447292544,
+      "v8.3_value": 2.7323722447292544,
+      "expected_to_differ": true,
+      "reason": "Ratio of tail to AUCINF_obs; changes because both AUClast and AUCINF_obs differ."
+    },
+    {
+      "parameter": "MRTINF_obs",
+      "v5.3_value": 7.061890262865276,
+      "v6.4_value": 6.66666666666667,
+      "v8.3_value": 6.66666666666667,
+      "expected_to_differ": true,
+      "reason": "MRT = AUMCINF/AUCINF. Both numerator and denominator differ, producing a different MRT."
+    },
+    {
+      "parameter": "CL",
+      "v5.3_value": 0.1441877330966269,
+      "v6.4_value": 0.15000000000000002,
+      "v8.3_value": 0.15000000000000002,
+      "expected_to_differ": true,
+      "reason": "CL = Dose/AUCINF_obs. Since AUCINF_obs differs, CL differs. v6.4/v8.3 recover the true CL=0.15."
+    },
+    {
+      "parameter": "Vz",
+      "v5.3_value": 0.9612515539775132,
+      "v6.4_value": 1.0000000000000007,
+      "v8.3_value": 1.0000000000000007,
+      "expected_to_differ": true,
+      "reason": "Vz = Dose/(Lambda_z * AUCINF_obs). Since AUCINF_obs differs, Vz differs."
+    },
+    {
+      "parameter": "Vss",
+      "v5.3_value": 1.0182379483796868,
+      "v6.4_value": 1.0000000000000007,
+      "v8.3_value": 1.0000000000000007,
+      "expected_to_differ": true,
+      "reason": "Vss = CL * MRT_obs. Both CL and MRT differ between v5.3 and v6.4/v8.3."
+    },
+    {
+      "parameter": "Lambda_z",
+      "v5.3_value": 0.14999999999999994,
+      "v6.4_value": 0.14999999999999994,
+      "v8.3_value": 0.14999999999999994,
+      "expected_to_differ": false,
+      "reason": "All versions use Best Fit lambda_z regression on the same log-linear terminal phase points. The dataset is a pure monoexponential so all versions produce the same Lambda_z."
+    },
+    {
+      "parameter": "HL_Lambda_z",
+      "v5.3_value": 4.6209812037329705,
+      "v6.4_value": 4.6209812037329705,
+      "v8.3_value": 4.6209812037329705,
+      "expected_to_differ": false,
+      "reason": "HL = ln(2)/Lambda_z. Lambda_z is identical across versions, so HL is identical."
+    },
+    {
+      "parameter": "No_points_lambda_z",
+      "v5.3_value": 7.0,
+      "v6.4_value": 7.0,
+      "v8.3_value": 7.0,
+      "expected_to_differ": false,
+      "reason": "Best Fit selects the same terminal points regardless of AUC method or C0 method."
+    },
+    {
+      "parameter": "Rsq",
+      "v5.3_value": 1.0,
+      "v6.4_value": 1.0,
+      "v8.3_value": 1.0,
+      "expected_to_differ": false,
+      "reason": "R² of terminal log-linear regression is independent of AUC/C0 methods."
+    },
+    {
+      "parameter": "Rsq_adjusted",
+      "v5.3_value": 1.0,
+      "v6.4_value": 1.0,
+      "v8.3_value": 1.0,
+      "expected_to_differ": false,
+      "reason": "Adjusted R² same reasoning as Rsq."
+    },
+    {
+      "parameter": "Cmax",
+      "v5.3_value": 92.77434863285528,
+      "v6.4_value": 92.77434863285528,
+      "v8.3_value": 92.77434863285528,
+      "expected_to_differ": false,
+      "reason": "Cmax is the maximum observed concentration — identical across versions."
+    },
+    {
+      "parameter": "Clast",
+      "v5.3_value": 2.732372244729257,
+      "v6.4_value": 2.732372244729257,
+      "v8.3_value": 2.732372244729257,
+      "expected_to_differ": false,
+      "reason": "Clast is the last observed quantifiable concentration — identical across versions."
+    },
+    {
+      "parameter": "Clast_pred",
+      "v5.3_value": null,
+      "v6.4_value": 2.7323722447292584,
+      "v8.3_value": 2.7323722447292584,
+      "expected_to_differ": true,
+      "reason": "Clast_pred is absent in v5.3 (output_pred_variants=False). v6.4 and v8.3 emit it."
+    },
+    {
+      "parameter": "AUCINF_pred",
+      "v5.3_value": null,
+      "v6.4_value": 666.6666666666665,
+      "v8.3_value": 666.6666666666665,
+      "expected_to_differ": true,
+      "reason": "AUCINF_pred is absent in v5.3 (output_pred_variants=False). v6.4 and v8.3 emit it."
+    },
+    {
+      "parameter": "Span",
+      "v5.3_value": 23.0,
+      "v6.4_value": 23.0,
+      "v8.3_value": 23.0,
+      "expected_to_differ": false,
+      "reason": "Span = Lambda_z_upper - Lambda_z_lower. Same regression window in all versions."
+    },
+    {
+      "parameter": "Span_ratio",
+      "v5.3_value": 4.977297891066922,
+      "v6.4_value": 4.977297891066922,
+      "v8.3_value": 4.977297891066922,
+      "expected_to_differ": false,
+      "reason": "Span_ratio = Span/HL. Lambda_z and Span are identical across versions."
+    }
+  ]
+}
