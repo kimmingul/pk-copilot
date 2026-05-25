@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "pk-kernel": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "pkplugin.mcp_server"],
+      "env": {
+        "PKPLUGIN_AUDIT_DIR": "${CLAUDE_PROJECT_DIR}/pk_runs",
+        "PKPLUGIN_R_BACKEND": "auto"
+      }
+    }
+  }
+}
