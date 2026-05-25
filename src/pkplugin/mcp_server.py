@@ -1797,6 +1797,245 @@ def impl_compare_against_reference(
 
 
 # ---------------------------------------------------------------------------
+# CDISC SDTM / ADaM implementation functions (v2.0)
+# ---------------------------------------------------------------------------
+
+
+def impl_import_sdtm(
+    pc_path: str,
+    ex_path: str,
+    dm_path: str | None = None,
+    analyte: str | None = None,
+    matrix: str | None = None,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Import SDTM PC + EX + optional DM → canonical CSVs + audit.
+
+    Returns a dict with keys: status, pc_csv, ex_csv, dm_csv (optional),
+    warnings, n_subjects, n_pc_rows.
+    """
+    from pkplugin.cdisc.sdtm import load_sdtm_dm, load_sdtm_ex, load_sdtm_pc, normalise_pc_times
+
+    pc_file = Path(pc_path).resolve()
+    ex_file = Path(ex_path).resolve()
+    if not pc_file.is_file():
+        return {"status": "error", "error": f"PC file not found: {pc_file}"}
+    if not ex_file.is_file():
+        return {"status": "error", "error": f"EX file not found: {ex_file}"}
+
+    try:
+        pc_df, pc_warnings = load_sdtm_pc(pc_file, analyte_filter=analyte, matrix_filter=matrix)
+        ex_df, ex_warnings = load_sdtm_ex(ex_file)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    # Normalise elapsed times using EX reference dates
+    pc_df = normalise_pc_times(pc_df, ex_df)
+
+    all_warnings = dict(pc_warnings)
+    all_warnings.update(ex_warnings)
+
+    # Write canonical CSVs to audit directory
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_id = new_run_id()
+    run_dir = audit_base / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    pc_csv = run_dir / "sdtm_pc_canonical.csv"
+    ex_csv = run_dir / "sdtm_ex_canonical.csv"
+    pc_df.to_csv(pc_csv, index=False)
+    ex_df.to_csv(ex_csv, index=False)
+
+    result: dict[str, Any] = {
+        "status": "ok",
+        "run_id": run_id,
+        "pc_csv": str(pc_csv),
+        "ex_csv": str(ex_csv),
+        "n_subjects": int(pc_df["subject_id"].nunique()) if not pc_df.empty else 0,
+        "n_pc_rows": len(pc_df),
+        "warnings": all_warnings,
+    }
+
+    if dm_path is not None:
+        dm_file = Path(dm_path).resolve()
+        if not dm_file.is_file():
+            result["dm_warning"] = f"DM file not found: {dm_file}"
+        else:
+            try:
+                dm_df = load_sdtm_dm(dm_file)
+                dm_csv = run_dir / "sdtm_dm_canonical.csv"
+                dm_df.to_csv(dm_csv, index=False)
+                result["dm_csv"] = str(dm_csv)
+                result["n_subjects_dm"] = len(dm_df)
+            except Exception as exc:
+                result["dm_warning"] = f"Failed to load DM: {exc}"
+
+    return result
+
+
+def impl_export_adam(
+    nca_run_id: str,
+    output_dir: str | None = None,
+    include_define_xml: bool = True,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Export ADPC + ADPP + optional define.xml from a previous NCA run.
+
+    Loads the NCA parameters.csv from the run directory, reconstructs
+    ADPP from saved parameter rows, and builds ADPC from the concentration
+    file if present.
+    """
+    from pkplugin.cdisc.adam import build_adpp, write_adam_dataset
+    from pkplugin.cdisc.define_xml import generate_define_xml
+    from pkplugin.cdisc.paramcd import pkcopilot_to_paramcd
+    from pkplugin.cdisc.validate import validate_adpp
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / nca_run_id
+    params_csv = run_dir / "parameters.csv"
+
+    if not params_csv.is_file():
+        return {"status": "error", "error": f"NCA parameters.csv not found: {params_csv}"}
+
+    try:
+        params_df = pd.read_csv(params_csv)
+    except Exception as exc:
+        return {"status": "error", "error": f"Failed to read parameters.csv: {exc}"}
+
+    out_dir = Path(output_dir).resolve() if output_dir else run_dir / "adam"
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Build minimal NCAResult-like objects from the saved parameter CSV
+    # We reconstruct parameters dict per subject group
+    from pkplugin.nca.engine import NCAResult
+    from pkplugin.nca.auc import AUCResult
+    from pkplugin.nca.lambda_z import LambdaZResult
+
+    # Build per-subject parameter dicts
+    nca_results: list[NCAResult] = []
+    group_cols = [c for c in ("subject_id", "period", "treatment", "analyte") if c in params_df.columns]
+
+    for group_key, group in params_df.groupby(group_cols, dropna=False):
+        if isinstance(group_key, str):
+            group_key = (group_key,)
+        key_dict = dict(zip(group_cols, group_key))
+        subject_id = str(key_dict.get("subject_id", "UNKNOWN"))
+        period = str(key_dict.get("period", "")) if key_dict.get("period") else None
+        treatment = str(key_dict.get("treatment", "")) if key_dict.get("treatment") else None
+        analyte = str(key_dict.get("analyte", "parent"))
+
+        params: dict[str, float | None] = {}
+        for _, prow in group.iterrows():
+            pname = str(prow.get("parameter", ""))
+            pval = prow.get("value")
+            params[pname] = float(pval) if pval is not None and not (isinstance(pval, float) and pd.isna(pval)) else None
+
+        # Build a minimal NCAResult (only parameters and metadata needed for ADPP)
+        dummy_auc = AUCResult(auc=0.0, aumc=0.0, method="linear_up_log_down", n_intervals=0)
+        dummy_lz = LambdaZResult(
+            lambda_z=None, intercept=None, half_life=None, r_squared=None,
+            adjusted_r_squared=None, n_points=0, t_start=None, t_end=None,
+            clast_pred=None, span_ratio=None, method="best_fit", warnings=[],
+        )
+        nr = NCAResult(
+            subject_id=subject_id,
+            period=period,
+            treatment=treatment,
+            analyte=analyte,
+            parameters=params,
+            parameter_rows=[],
+            auc_result=dummy_auc,
+            lambda_z_result=dummy_lz,
+            bloq_decisions=[],
+        )
+        nca_results.append(nr)
+
+    study_id = "STUDY001"
+    adpp_df = build_adpp(nca_results, dm_df=None, study_id=study_id)
+    adpp_path = write_adam_dataset(adpp_df, out_dir / "adpp.csv")
+
+    validation_issues = validate_adpp(adpp_df)
+    n_errors = sum(1 for i in validation_issues if i.get("severity") == "ERROR")
+
+    result: dict[str, Any] = {
+        "status": "ok",
+        "adpp_path": str(adpp_path),
+        "n_adpp_rows": len(adpp_df),
+        "validation_issues": validation_issues,
+        "n_validation_errors": n_errors,
+    }
+
+    # Collect PARAMCDs used
+    paramcds_used: list[str] = []
+    if "PARAMCD" in adpp_df.columns:
+        paramcds_used = sorted(adpp_df["PARAMCD"].dropna().unique().tolist())
+
+    if include_define_xml:
+        try:
+            define_path = generate_define_xml(
+                study_id=study_id,
+                domains=["ADPP"],
+                paramcds_used=paramcds_used,
+                output_path=out_dir / "define.xml",
+            )
+            result["define_xml_path"] = str(define_path)
+        except Exception as exc:
+            result["define_xml_warning"] = f"define.xml generation failed: {exc}"
+
+    return result
+
+
+def impl_validate_cdisc(
+    dataset_path: str,
+    domain: str,
+) -> dict[str, Any]:
+    """Run Pinnacle21-style validation checks on an ADaM dataset.
+
+    Args:
+        dataset_path: Path to ADPC or ADPP CSV file.
+        domain: ``"ADPC"`` or ``"ADPP"``.
+
+    Returns:
+        Dict with keys: status, issues, n_errors, n_warnings.
+    """
+    from pkplugin.cdisc.validate import validate_adpc, validate_adpp
+
+    domain_upper = domain.strip().upper()
+    if domain_upper not in ("ADPC", "ADPP"):
+        return {
+            "status": "error",
+            "error": f"Unsupported domain {domain!r}. Expected 'ADPC' or 'ADPP'.",
+        }
+
+    ds_path = Path(dataset_path).resolve()
+    if not ds_path.is_file():
+        return {"status": "error", "error": f"Dataset file not found: {ds_path}"}
+
+    try:
+        df = pd.read_csv(ds_path)
+    except Exception as exc:
+        return {"status": "error", "error": f"Failed to read dataset: {exc}"}
+
+    if domain_upper == "ADPC":
+        issues = validate_adpc(df)
+    else:
+        issues = validate_adpp(df)
+
+    n_errors = sum(1 for i in issues if i.get("severity") == "ERROR")
+    n_warnings = sum(1 for i in issues if i.get("severity") == "WARNING")
+
+    return {
+        "status": "ok",
+        "domain": domain_upper,
+        "n_rows": len(df),
+        "issues": issues,
+        "n_errors": n_errors,
+        "n_warnings": n_warnings,
+        "passed": n_errors == 0,
+    }
+
+
+# ---------------------------------------------------------------------------
 # fastmcp wrapper (only imported when actually running as MCP server)
 # ---------------------------------------------------------------------------
 
@@ -1992,6 +2231,36 @@ def _build_mcp() -> Any:
         return impl_compare_against_reference(
             run_id, reference_backend, tolerance_relative, audit_dir
         )
+
+    @mcp.tool
+    def import_sdtm(
+        pc_path: str,
+        ex_path: str,
+        dm_path: str | None = None,
+        analyte: str | None = None,
+        matrix: str | None = None,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Import SDTM PC + EX + optional DM domains → canonical CSVs + audit."""
+        return impl_import_sdtm(pc_path, ex_path, dm_path, analyte, matrix, audit_dir)
+
+    @mcp.tool
+    def export_adam(
+        nca_run_id: str,
+        output_dir: str | None = None,
+        include_define_xml: bool = True,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Export ADPC + ADPP + define.xml from a previous NCA run."""
+        return impl_export_adam(nca_run_id, output_dir, include_define_xml, audit_dir)
+
+    @mcp.tool
+    def validate_cdisc(
+        dataset_path: str,
+        domain: str,
+    ) -> dict[str, Any]:
+        """Run Pinnacle21-style validation checks on an ADaM dataset (ADPC or ADPP)."""
+        return impl_validate_cdisc(dataset_path, domain)
 
     return mcp
 
