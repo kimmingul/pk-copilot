@@ -15,9 +15,12 @@ Refs: docs/06-mcp-server.md
 from __future__ import annotations
 
 import json
+import logging
 import os
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 import pandas as pd
 
@@ -76,8 +79,8 @@ def _emit_chain_entry(
             run_id=run_id,
             after=after,
         )
-    except Exception:
-        pass  # best-effort — do not break existing tool calls
+    except Exception as _exc:
+        logger.warning("_emit_chain_entry failed for action=%r run_id=%r: %s", action, run_id, _exc)
 
 
 # Compartmental imports — resolved lazily inside each impl to avoid hard
@@ -2042,6 +2045,12 @@ def impl_export_adam(
         "n_adpp_rows": len(adpp_df),
         "validation_issues": validation_issues,
         "n_validation_errors": n_errors,
+        # M3: ADPC export is deferred — be explicit rather than silently skipping
+        "adpc_status": "not_implemented_v2_0",
+        "adpc_note": (
+            "ADaM ADPC export deferred to v2.1; "
+            "impl_export_adam currently writes ADPP only."
+        ),
     }
 
     # Collect PARAMCDs used
@@ -2152,6 +2161,17 @@ def impl_sign_record(
             "error": f"Invalid meaning {meaning!r}. Must be one of: {sorted(valid_meanings)}",
         }
 
+    # H3: auth_token is required — reject empty/None before any signing attempt.
+    # INTEGRATION NOTE: This is a CALLBACK placeholder for production TOTP/FIDO
+    # integration.  The MCP server does NOT validate the token cryptographically —
+    # that is the caller's responsibility (e.g. via mTLS transport or a validated
+    # session token from the authentication provider).  The contract is: callers
+    # MUST supply a non-empty string representing a successfully-validated session
+    # token.  The response field ``auth_token_verified: "caller_attestation"``
+    # makes this caller-attested nature explicit.
+    if not auth_token or not auth_token.strip():
+        return {"status": "error", "error": "auth_token required"}
+
     audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
     run_dir = audit_base / run_id
 
@@ -2171,7 +2191,7 @@ def impl_sign_record(
             meaning=meaning,  # type: ignore[arg-type]
             private_key_path=key_path,
             passphrase=passphrase_bytes,
-            require_reauth_token=auth_token if auth_token else None,
+            require_reauth_token=auth_token,
         )
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
@@ -2192,6 +2212,7 @@ def impl_sign_record(
 
     return {
         "status": "ok",
+        "auth_token_verified": "caller_attestation",
         "run_id": run_id,
         "signer_id": sig.signer_id,
         "meaning": sig.meaning,
@@ -2236,6 +2257,22 @@ def impl_lock_run(
         _valid: set[str] = {"authored", "reviewed", "approved", "rejected"}
         req_sigs = _cast(list[_SM], [s for s in require_signatures if s in _valid])
 
+    # H4: Audit chain entry MUST be appended BEFORE files become read-only so
+    # the chain JSONL is still writable.  If the chain append fails, abort the
+    # entire lock operation — do not proceed to retention.lock_run().
+    try:
+        chain = AuditChain.open(run_dir)
+        chain.append(
+            action="lock_run",
+            user={"id": locked_by, "auth_method": "admin"},
+            reason=lock_reason,
+            run_id=run_id,
+            before={"locked": False},
+            after={"locked": True},
+        )
+    except Exception as exc:
+        return {"status": "error", "error": f"Audit chain append failed — lock aborted: {exc}"}
+
     try:
         manifest = lock_run(
             run_dir=run_dir,
@@ -2245,20 +2282,6 @@ def impl_lock_run(
         )
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
-
-    # Emit chain entry (audit chain itself stays writable even after lock)
-    try:
-        chain = AuditChain.open(run_dir)
-        chain.append(
-            action="lock_run",
-            user={"id": locked_by, "auth_method": "admin"},
-            reason=lock_reason,
-            run_id=run_id,
-            before={"locked": False},
-            after={"locked": True, "bundle_sha256": manifest.bundle_sha256},
-        )
-    except Exception:
-        pass
 
     return {
         "status": "ok",

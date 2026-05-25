@@ -269,3 +269,91 @@ def test_load_or_create_hmac_key(tmp_path: Path) -> None:
     assert key1 == key2  # same key on second call
     assert len(key1) == 32
     assert (tmp_path / "chain.key").exists()
+
+
+# ---------------------------------------------------------------------------
+# C1 regression: tamper detection for individual fields
+# ---------------------------------------------------------------------------
+
+
+def _append_and_tamper(tmp_path: Path, field: str, new_value: object) -> tuple[bool, list[str]]:
+    """Helper: append one entry, tamper *field* in the JSONL, return verify()."""
+    chain = AuditChain.open(tmp_path)
+    chain.append(
+        action="x",
+        user={"id": "u", "auth_method": "none"},
+        reason="original",
+        run_id="r1",
+    )
+    p = tmp_path / "audit-chain.jsonl"
+    data = json.loads(p.read_text())
+    data[field] = new_value
+    p.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    return chain.verify()
+
+
+def test_tamper_detection_reason_field(tmp_path: Path) -> None:
+    chain = AuditChain.open(tmp_path)
+    chain.append(action="x", user={"id": "u", "auth_method": "none"}, reason="original")
+    p = tmp_path / "audit-chain.jsonl"
+    text = p.read_text()
+    tampered = text.replace('"original"', '"tampered"')
+    p.write_text(tampered)
+    ok, violations = chain.verify()
+    assert not ok
+    assert any("hash" in v.lower() or "tamper" in v.lower() for v in violations)
+
+
+def test_tamper_detection_user_field(tmp_path: Path) -> None:
+    ok, violations = _append_and_tamper(
+        tmp_path, "user", {"id": "attacker@evil.com", "auth_method": "none"}
+    )
+    assert not ok
+    assert any("hash" in v.lower() or "tamper" in v.lower() for v in violations)
+
+
+def test_tamper_detection_workstation_field(tmp_path: Path) -> None:
+    ok, violations = _append_and_tamper(tmp_path, "workstation", "evil-host/linux")
+    assert not ok
+    assert any("hash" in v.lower() or "tamper" in v.lower() for v in violations)
+
+
+def test_tamper_detection_ntp_source_field(tmp_path: Path) -> None:
+    ok, violations = _append_and_tamper(tmp_path, "ntp_source", "evil-ntp.example.com")
+    assert not ok
+    assert any("hash" in v.lower() or "tamper" in v.lower() for v in violations)
+
+
+def test_tamper_detection_action_field(tmp_path: Path) -> None:
+    ok, violations = _append_and_tamper(tmp_path, "action", "evil_action")
+    assert not ok
+    assert any("hash" in v.lower() or "tamper" in v.lower() for v in violations)
+
+
+# ---------------------------------------------------------------------------
+# C2 regression: HMAC key path from env var + warning on default location
+# ---------------------------------------------------------------------------
+
+
+def test_hmac_key_path_from_env_var(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """PKPLUGIN_CHAIN_KEY_PATH overrides the default co-located key path."""
+    external_key = tmp_path / "external" / "chain.key"
+    external_key.parent.mkdir()
+    monkeypatch.setenv("PKPLUGIN_CHAIN_KEY_PATH", str(external_key))
+
+    result = default_hmac_key_path(tmp_path / "chain_dir")
+    assert result == external_key
+
+
+def test_hmac_key_warning_on_default_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Creating a key at the default (co-located) location emits UserWarning."""
+    monkeypatch.delenv("PKPLUGIN_CHAIN_KEY_PATH", raising=False)
+    import warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        load_or_create_hmac_key(tmp_path)
+    assert any(
+        "PKPLUGIN_CHAIN_KEY_PATH" in str(warning.message) for warning in w
+    ), "Expected warning about co-located key file"

@@ -1,6 +1,6 @@
 {
   "name": "pk-copilot",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Phoenix WinNonlin-compatible PK/PD/NCA/Compartmental analysis copilot for Claude Code. Version-aware algorithms (WinNonlin 5.3/6.4/8.3). v2.0 includes 21 CFR Part 11 controls and CDISC SDTM/ADaM support.",
   "author": {
     "name": "pk-copilot contributors",

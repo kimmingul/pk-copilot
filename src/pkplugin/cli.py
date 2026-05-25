@@ -207,6 +207,18 @@ def _cmd_keygen(args: argparse.Namespace) -> int:
     import pathlib
 
     output_path = pathlib.Path(args.output)
+
+    # M2: Refuse to overwrite an existing key file unless --force is given
+    if output_path.exists() and not getattr(args, "force", False):
+        print(
+            json.dumps({
+                "status": "error",
+                "error": f"key file already exists at {output_path}. Use --force to overwrite.",
+            }),
+            file=sys.stderr,
+        )
+        return 1
+
     passphrase_bytes: bytes | None = None
     if args.passphrase:
         import getpass
@@ -366,6 +378,7 @@ def _build_parser() -> argparse.ArgumentParser:
     p_keygen = sub.add_parser("keygen", help="Generate Ed25519 keypair for e-signatures.")
     p_keygen.add_argument("--output", required=True, metavar="keys/myuser.key", help="Output path for private key PEM.")
     p_keygen.add_argument("--passphrase", action="store_true", help="Prompt for passphrase to encrypt private key.")
+    p_keygen.add_argument("--force", action="store_true", help="Overwrite existing key file if it already exists.")
 
     # sign
     p_sign = sub.add_parser("sign", help="Sign a run bundle (e-signature, §11.50).")

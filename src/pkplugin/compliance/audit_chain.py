@@ -51,21 +51,74 @@ def derive_hmac_key(passphrase: str, salt: bytes) -> bytes:
 
 
 def default_hmac_key_path(chain_dir: str | Path) -> Path:
-    """Return the canonical path for the HMAC key file in *chain_dir*."""
+    """Return the canonical path for the HMAC key file.
+
+    Checks the ``PKPLUGIN_CHAIN_KEY_PATH`` environment variable first.
+    If unset, falls back to ``<chain_dir>/chain.key`` (co-located with the
+    chain file).
+
+    .. warning::
+        Storing the key alongside the chain file weakens tamper-evidence —
+        an attacker who can modify the chain can also re-HMAC it with the
+        co-located key.  For production 21 CFR Part 11 deployments, set
+        ``PKPLUGIN_CHAIN_KEY_PATH`` to an externally-managed (e.g. KMS-backed)
+        key location.
+    """
+    env_path = os.environ.get("PKPLUGIN_CHAIN_KEY_PATH")
+    if env_path:
+        return Path(env_path)
     return Path(chain_dir) / "chain.key"
 
 
 def load_or_create_hmac_key(chain_dir: str | Path) -> bytes:
-    """Read chain.key or create a fresh one with os.urandom(32).
+    """Read the HMAC key or create a fresh one with os.urandom(32).
+
+    Key path resolution: ``PKPLUGIN_CHAIN_KEY_PATH`` env var takes priority;
+    falls back to ``<chain_dir>/chain.key``.  When the fallback (co-located)
+    path is used for the first time, a :class:`UserWarning` is emitted advising
+    production deployments to use an external KMS-backed location.
 
     Refuses to overwrite an existing key file.
     """
-    key_path = default_hmac_key_path(chain_dir)
+    import warnings as _w
+
+    env_path = os.environ.get("PKPLUGIN_CHAIN_KEY_PATH")
+    key_path = Path(env_path) if env_path else Path(chain_dir) / "chain.key"
+    using_default_location = not env_path
+
     if key_path.exists():
+        # Warn if permissions are too open (Opus review MAJOR-1 follow-up)
+        try:
+            mode = key_path.stat().st_mode & 0o777
+            if mode & 0o077:
+                _w.warn(
+                    f"HMAC chain key at {key_path} has permissions {oct(mode)}; "
+                    f"recommend 0o600. Run `chmod 600 {key_path}` to restrict.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+        except OSError:
+            pass
         return key_path.read_bytes()
+
     # Create a new 32-byte random key
+    if using_default_location:
+        _w.warn(
+            "WARNING: HMAC chain key stored alongside chain file. "
+            "For production Part 11 use, set PKPLUGIN_CHAIN_KEY_PATH to an "
+            "external KMS-backed location.",
+            UserWarning,
+            stacklevel=2,
+        )
     key = os.urandom(32)
+    key_path.parent.mkdir(parents=True, exist_ok=True)
     key_path.write_bytes(key)
+    # Restrict permissions to owner-only (Part 11 tamper-evidence requirement)
+    try:
+        os.chmod(key_path, 0o600)
+    except OSError:
+        # Non-POSIX filesystems (Windows) — best effort
+        pass
     return key
 
 
@@ -100,14 +153,20 @@ def _compute_payload_sha256(
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
-def _compute_this_hash(
-    prev_hash: str,
-    payload_sha256: str,
-    event_id: str,
-    timestamp_utc: str,
-) -> str:
-    combined = prev_hash + payload_sha256 + event_id + timestamp_utc
-    return hashlib.sha256(combined.encode()).hexdigest()
+def _canonical_body(entry_dict: dict[str, Any]) -> str:
+    """Return canonical JSON of an entry dict with ``this_hash`` and ``hmac`` stripped.
+
+    Used as the pre-image for ``this_hash`` computation so that ALL fields
+    (including ``user``, ``reason``, ``workstation``, ``ntp_source``, etc.) are
+    covered by the hash.  ``this_hash`` and ``hmac`` are excluded because they
+    are computed FROM this body and cannot appear in their own input.
+    """
+    body = {k: v for k, v in entry_dict.items() if k not in ("this_hash", "hmac")}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), default=str)
+
+
+def _compute_this_hash_from_body(body_json: str) -> str:
+    return hashlib.sha256(body_json.encode()).hexdigest()
 
 
 def _compute_hmac(this_hash: str, key: bytes) -> str:
@@ -166,7 +225,7 @@ class AuditChainEntry:
     """sha256 of canonical JSON of (action, run_id, before, after)."""
 
     this_hash: str
-    """sha256 of (prev_hash || payload_sha256 || event_id || timestamp_utc)."""
+    """sha256 of the canonical JSON of all fields except this_hash and hmac."""
 
     hmac: str
     """hex hmac-sha256 of this_hash using the chain key."""
@@ -228,7 +287,25 @@ class AuditChain:
         workstation = socket.gethostname() + "/" + platform.system().lower()
 
         payload_sha256 = _compute_payload_sha256(action, run_id, before, after)
-        this_hash = _compute_this_hash(prev_hash, payload_sha256, event_id, timestamp_utc)
+
+        # Build the entry dict without this_hash/hmac so _canonical_body can
+        # produce the exact pre-image used for this_hash computation.
+        entry_body: dict[str, Any] = {
+            "event_id": event_id,
+            "prev_hash": prev_hash,
+            "timestamp_utc": timestamp_utc,
+            "ntp_source": ntp_source,
+            "user": user,
+            "workstation": workstation,
+            "action": action,
+            "run_id": run_id,
+            "reason": reason,
+            "before": before,
+            "after": after,
+            "payload_sha256": payload_sha256,
+        }
+        body_json = _canonical_body(entry_body)
+        this_hash = _compute_this_hash_from_body(body_json)
         hmac_hex = _compute_hmac(this_hash, self._key)
 
         entry = AuditChainEntry(
@@ -295,13 +372,13 @@ class AuditChain:
                     f"got {str(data.get('prev_hash', ''))[:16]}..."
                 )
 
-            # 2. Verify this_hash
-            expected_this = _compute_this_hash(
-                data.get("prev_hash", ""),
-                data.get("payload_sha256", ""),
-                data.get("event_id", ""),
-                data.get("timestamp_utc", ""),
-            )
+            # 2. Verify this_hash — re-compute from the canonical body using the
+            #    EXPECTED prev_hash (not the stored one) so tampering of any field,
+            #    including prev_hash itself, is detected.
+            body_for_verify = {k: v for k, v in data.items() if k not in ("this_hash", "hmac")}
+            body_for_verify["prev_hash"] = prev_hash  # use expected, not stored
+            body_json = _canonical_body(body_for_verify)
+            expected_this = _compute_this_hash_from_body(body_json)
             if data.get("this_hash") != expected_this:
                 violations.append(
                     f"line {line_no} (event_id={entry_id}): "
@@ -329,7 +406,8 @@ class AuditChain:
                     f"HMAC verification failed"
                 )
 
-            # Advance prev_hash for next iteration
+            # Advance prev_hash for next iteration (use stored this_hash so the
+            # chain walk continues; violations are already recorded above).
             prev_hash = data.get("this_hash", "")
 
         return len(violations) == 0, violations

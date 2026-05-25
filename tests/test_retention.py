@@ -238,3 +238,94 @@ def test_unlock_by_non_admin_raises(tmp_path: Path) -> None:
             unlock_reason="Unauthorized attempt",
             chain=chain,
         )
+
+
+# ---------------------------------------------------------------------------
+# H2. Separation of duties — same signer for all meanings raises LockError
+# ---------------------------------------------------------------------------
+
+from pkplugin.compliance.retention import LockError  # noqa: E402
+
+
+def test_lock_run_same_signer_all_meanings_raises(tmp_path: Path) -> None:
+    """lock_run with require_distinct_signers=True raises if one signer covers all meanings."""
+    run_dir = _make_run_dir(tmp_path)
+
+    # Single signer signs all three meanings
+    kp = generate_keypair()
+    kp_path = tmp_path / "single.key"
+    save_private_key(kp, kp_path)
+    for meaning in ("authored", "reviewed", "approved"):
+        sign_run(
+            run_dir=run_dir,
+            signer_id="omnisigner@example.com",
+            meaning=meaning,  # type: ignore[arg-type]
+            private_key_path=kp_path,
+        )
+
+    with pytest.raises(LockError, match="[Ss]eparation"):
+        lock_run(
+            run_dir,
+            locked_by="admin@example.com",
+            lock_reason="Should fail",
+            require_distinct_signers=True,
+        )
+
+
+def test_lock_run_same_signer_distinct_false_succeeds(tmp_path: Path) -> None:
+    """lock_run with require_distinct_signers=False allows single signer for all."""
+    run_dir = _make_run_dir(tmp_path)
+
+    kp = generate_keypair()
+    kp_path = tmp_path / "single.key"
+    save_private_key(kp, kp_path)
+    for meaning in ("authored", "reviewed", "approved"):
+        sign_run(
+            run_dir=run_dir,
+            signer_id="omnisigner@example.com",
+            meaning=meaning,  # type: ignore[arg-type]
+            private_key_path=kp_path,
+        )
+
+    manifest = lock_run(
+        run_dir,
+        locked_by="admin@example.com",
+        lock_reason="Override allowed",
+        require_distinct_signers=False,
+    )
+    assert manifest is not None
+
+
+# ---------------------------------------------------------------------------
+# M1. unlock_run checks session expiry
+# ---------------------------------------------------------------------------
+
+
+def test_unlock_expired_session_raises(tmp_path: Path) -> None:
+    """unlock_run raises UnlockError when admin session is expired."""
+    run_dir = _make_run_dir(tmp_path)
+    _sign_all(run_dir, tmp_path)
+    lock_run(run_dir, locked_by="admin@example.com", lock_reason="Final")
+
+    # Admin with EXPIRED session
+    from datetime import timedelta
+    expired_expiry = (datetime.now(timezone.utc) - timedelta(hours=1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    admin = Principal(
+        user_id="admin@example.com",
+        role=Role.ADMIN,
+        session_token="sess_expired",
+        session_expires_utc=expired_expiry,
+    )
+    chain_dir = tmp_path / "chain"
+    chain_dir.mkdir()
+    chain = AuditChain.open(chain_dir)
+
+    with pytest.raises(UnlockError, match="[Ss]ession|[Ee]xpir"):
+        unlock_run(
+            run_dir=run_dir,
+            admin_principal=admin,
+            unlock_reason="Emergency unlock",
+            chain=chain,
+        )

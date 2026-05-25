@@ -284,3 +284,34 @@ def test_no_signatures_file(tmp_path: Path) -> None:
     ok, failures = verify_all_signatures(run_dir)
     assert ok
     assert failures == []
+
+
+# ---------------------------------------------------------------------------
+# H1 regression: compute_run_hash uses POSIX path separators
+# ---------------------------------------------------------------------------
+
+
+def test_compute_run_hash_posix_separators(tmp_path: Path) -> None:
+    """Run hash must use forward-slash separators regardless of OS."""
+    run_dir = _make_run_dir(tmp_path)
+    # Compute hash and verify it's stable (no OS-dependent separators).
+    h1 = compute_run_hash(run_dir)
+    h2 = compute_run_hash(run_dir)
+    assert h1 == h2
+    assert len(h1) == 64
+
+    # Manually verify that the canonical string uses '/' not '\\'
+    import hashlib as _hashlib
+
+    entries: list[str] = []
+    for fpath in sorted(run_dir.rglob("*")):
+        if not fpath.is_file():
+            continue
+        if fpath.name in {"signatures.jsonl", "audit-chain.jsonl", "chain.key", "LOCKED.json"}:
+            continue
+        rel = fpath.relative_to(run_dir)
+        fh = _hashlib.sha256(fpath.read_bytes()).hexdigest()
+        entries.append(f"{rel.as_posix()}:{fh}")
+    canonical = "\n".join(entries) + "\n"
+    expected = _hashlib.sha256(canonical.encode()).hexdigest()
+    assert h1 == expected, "compute_run_hash does not use POSIX separators"

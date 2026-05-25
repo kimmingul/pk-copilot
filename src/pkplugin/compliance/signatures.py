@@ -144,6 +144,12 @@ def save_private_key(
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(pem)
+    # Restrict private-key file to owner-only (Part 11 + best practice)
+    try:
+        import os
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return path
 
 
@@ -182,7 +188,7 @@ def compute_run_hash(run_dir: Path) -> str:
             continue
         rel = fpath.relative_to(run_dir)
         file_hash = hashlib.sha256(fpath.read_bytes()).hexdigest()
-        entries.append(f"{rel}:{file_hash}")
+        entries.append(f"{rel.as_posix()}:{file_hash}")
     canonical = "\n".join(entries) + "\n"
     return hashlib.sha256(canonical.encode()).hexdigest()
 

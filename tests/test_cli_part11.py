@@ -75,6 +75,7 @@ def test_cmd_sign(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
             "--identity", "analyst@example.com",
             "--meaning", "authored",
             "--key", str(key_path),
+            "--auth-token", "test-session-token",
             "--out", str(tmp_path),
         ],
         capsys,
@@ -83,6 +84,7 @@ def test_cmd_sign(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     result = json.loads(out)
     assert result["status"] == "ok"
     assert result["meaning"] == "authored"
+    assert result["auth_token_verified"] == "caller_attestation"
 
 
 # ---------------------------------------------------------------------------
@@ -133,3 +135,72 @@ def test_cmd_verify_sigs_unsigned(tmp_path: Path, capsys: pytest.CaptureFixture[
     result = json.loads(out)
     assert result["status"] == "ok"
     assert result["n_signatures"] == 0
+
+
+# ---------------------------------------------------------------------------
+# M2. keygen refuses to overwrite without --force
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_keygen_refuses_overwrite(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """keygen returns error if key file already exists and --force is not given."""
+    key_path = str(tmp_path / "existing.key")
+    # First call — succeeds
+    code, out, err = _run(["keygen", "--output", key_path], capsys)
+    assert code == 0, f"First keygen failed: {err}"
+
+    # Second call without --force — must fail
+    code2, out2, err2 = _run(["keygen", "--output", key_path], capsys)
+    assert code2 != 0, "Expected non-zero exit when key file already exists"
+    result2 = json.loads(err2)
+    assert result2["status"] == "error"
+    assert "already exists" in result2["error"]
+
+
+def test_cmd_keygen_force_overwrites(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """keygen with --force overwrites an existing key file."""
+    key_path = str(tmp_path / "existing.key")
+    code, _, _ = _run(["keygen", "--output", key_path], capsys)
+    assert code == 0
+
+    first_key = Path(key_path).read_bytes()
+
+    code2, out2, _ = _run(["keygen", "--output", key_path, "--force"], capsys)
+    assert code2 == 0, "keygen --force should succeed"
+    result2 = json.loads(out2)
+    assert result2["status"] == "ok"
+
+    # Key bytes should differ (new random key generated)
+    second_key = Path(key_path).read_bytes()
+    assert first_key != second_key
+
+
+# ---------------------------------------------------------------------------
+# H3. impl_sign_record rejects empty auth_token
+# ---------------------------------------------------------------------------
+
+
+def test_cmd_sign_empty_auth_token_fails(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """sign with no --auth-token (empty string) returns error."""
+    run_id = "h3-no-auth-run"
+    _make_run(tmp_path, run_id)
+    kp = generate_keypair()
+    key_path = tmp_path / "analyst.key"
+    save_private_key(kp, key_path)
+
+    # Explicitly pass empty auth-token
+    code, out, err = _run(
+        [
+            "sign", run_id,
+            "--identity", "analyst@example.com",
+            "--meaning", "authored",
+            "--key", str(key_path),
+            "--auth-token", "",
+            "--out", str(tmp_path),
+        ],
+        capsys,
+    )
+    assert code != 0
+    # Error may appear in stdout or stderr depending on impl
+    combined = out + err
+    assert "auth_token" in combined.lower() or "error" in combined.lower()

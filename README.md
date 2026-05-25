@@ -3,7 +3,7 @@
 > Phoenix WinNonlin과 수치 호환되는 Pharmacokinetics(PK) / Pharmacodynamics(PD) / NCA / Compartmental Analysis 를 Claude Code에서 자연어로 수행하는 AI 코파일럿 플러그인.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.0.0-brightgreen)]()
 [![WinNonlin Compat](https://img.shields.io/badge/WinNonlin-5.3%20%7C%206.4%20%7C%208.3-brightgreen)]()
 
 ## 한 줄 정의

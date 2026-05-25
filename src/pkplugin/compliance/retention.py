@@ -69,6 +69,10 @@ class UnlockError(Exception):
     """Raised when unlock_run prerequisites are not met."""
 
 
+class LockError(Exception):
+    """Raised when lock_run prerequisites are not met (e.g. separation-of-duties)."""
+
+
 # ---------------------------------------------------------------------------
 # Bundle hash
 # ---------------------------------------------------------------------------
@@ -94,7 +98,7 @@ def _compute_bundle_sha256(run_dir: Path) -> str:
             continue
         if fpath.name in _BUNDLE_EXCLUSIONS:
             continue
-        rel = str(fpath.relative_to(run_dir))
+        rel = fpath.relative_to(run_dir).as_posix()
         h.update(rel.encode())
         h.update(b":")
         h.update(fpath.read_bytes())
@@ -113,14 +117,16 @@ def lock_run(
     lock_reason: str,
     *,
     require_signatures: list[SignatureMeaning] | None = None,
+    require_distinct_signers: bool = True,
 ) -> LockManifest:
     """Finalize a run bundle.
 
     Steps:
     1. Verify all required signatures are present and valid.
-    2. Compute bundle SHA-256 hash.
-    3. Write <run_dir>/LOCKED.json.
-    4. Set all bundle files to read-only (os.chmod 0o444).
+    2. Optionally enforce separation of duties (distinct signers per meaning).
+    3. Compute bundle SHA-256 hash.
+    4. Write <run_dir>/LOCKED.json.
+    5. Set all bundle files to read-only (os.chmod 0o444).
 
     Args:
         run_dir: Directory containing the run artifacts.
@@ -128,6 +134,9 @@ def lock_run(
         lock_reason: Non-empty reason string.
         require_signatures: List of signature meanings that must be present.
             Defaults to ["authored", "reviewed", "approved"].
+        require_distinct_signers: When True (default), no single signer_id may
+            cover all required meanings simultaneously.  Raises
+            :class:`LockError` if the constraint is violated.
 
     Returns:
         The :class:`LockManifest`.
@@ -135,6 +144,7 @@ def lock_run(
     Raises:
         FileNotFoundError: If run_dir does not exist.
         ValueError: If required signatures are missing or invalid.
+        LockError: If separation-of-duties check fails.
     """
     if require_signatures is None:
         require_signatures = ["authored", "reviewed", "approved"]
@@ -161,6 +171,29 @@ def lock_run(
         raise ValueError(
             f"Cannot lock run {run_dir.name!r}: signature verification failed: {failures}"
         )
+
+    # Separation-of-duties check: no single signer may cover all required meanings
+    if require_distinct_signers and len(require_signatures) > 1:
+        # Map meaning -> signer_id for required meanings only
+        meaning_to_signer: dict[str, str] = {}
+        for sig in present_sigs:
+            if sig.meaning in require_signatures:
+                meaning_to_signer[sig.meaning] = sig.signer_id
+        # Find any signer_id that covers ALL required meanings
+        required_set = set(require_signatures)
+        covered_by: dict[str, set[str]] = {}
+        for meaning, signer_id in meaning_to_signer.items():
+            covered_by.setdefault(signer_id, set()).add(meaning)
+        offenders = [
+            sid for sid, meanings in covered_by.items()
+            if required_set.issubset(meanings)
+        ]
+        if offenders:
+            raise LockError(
+                f"Separation-of-duties violation: signer(s) {offenders} "
+                f"covered all required meanings {sorted(required_set)}. "
+                "Use require_distinct_signers=False to override."
+            )
 
     # Compute bundle hash
     bundle_sha256 = _compute_bundle_sha256(run_dir)
@@ -269,6 +302,13 @@ def unlock_run(
         check_permission(admin_principal, "unlock_with_signed_reason")
     except AccessDeniedError as exc:
         raise UnlockError(str(exc)) from exc
+
+    # M1: Also verify session has not expired
+    from pkplugin.compliance.access import is_session_valid
+    if not is_session_valid(admin_principal):
+        raise UnlockError(
+            f"admin session expired for {admin_principal.user_id!r}"
+        )
 
     # Record unlock event in the audit chain BEFORE modifying files
     chain.append(

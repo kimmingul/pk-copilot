@@ -25,7 +25,7 @@ from pkplugin.nca.engine import NCAResult
 ADPC_VARIABLES = [
     "STUDYID", "USUBJID", "SUBJID", "SITEID", "AGE", "AGEU", "SEX", "RACE",
     "ARM", "ARMCD", "ACTARM",
-    "PARAMCD", "PARAM", "PARAMN", "AVAL", "AVALC", "AVALU",
+    "PARAMCD", "PARAM", "PARAMN", "PARCAT1", "AVAL", "AVALC", "AVALU",
     "AVISIT", "AVISITN", "ATPT", "ATPTN",
     "ADTM", "ADY", "ATM", "NRRLT", "ARRLT",
     "ANL01FL", "SAFFL", "ITTFL", "TRTP", "TRTA",
@@ -120,9 +120,18 @@ def build_adpc(
         raw_conc = row.get("raw_concentration")
         avalc = str(raw_conc) if raw_conc is not None and str(raw_conc) not in ("", "nan", "None") else None
 
-        analyte = str(row.get("analyte", "UNKNOWN"))
+        analyte_raw = row.get("analyte")
+        analyte = str(analyte_raw) if analyte_raw is not None and str(analyte_raw) not in ("", "nan", "None") else "UNKNOWN"
         paramcd = f"{analyte}PC"
         param = f"{analyte} Concentration"
+        # PARCAT1: derive from analyte column (parent vs metabolite) or matrix.
+        # Convention: analyte names ending in 'M' or 'MET' are metabolites;
+        # everything else defaults to 'PARENT'.
+        analyte_upper = analyte.upper()
+        if analyte_upper.endswith("MET") or analyte_upper.endswith("_M"):
+            parcat1: str = "METABOLITE"
+        else:
+            parcat1 = "PARENT"
 
         atpt = row.get("pctpt")
         atptn = row.get("pctptnum")
@@ -146,6 +155,7 @@ def build_adpc(
             "PARAMCD": paramcd,
             "PARAM": param,
             "PARAMN": row_num,
+            "PARCAT1": parcat1,
             "AVAL": aval,
             "AVALC": avalc if avalc else (str(aval) if aval is not None else pd.NA),
             "AVALU": avalu,

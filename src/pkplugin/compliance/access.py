@@ -88,11 +88,18 @@ class AccessDeniedError(Exception):
 
 
 def check_permission(principal: Principal, required: str) -> None:
-    """Assert *principal* has *required* permission.
+    """Assert *principal* has *required* permission and that their session has not expired.
 
     Raises:
-        AccessDeniedError: if the principal's role does not include *required*.
+        AccessDeniedError: if the principal's role does not include *required*,
+            or if the session has expired.
     """
+    # MINOR-4: Reject expired sessions before checking role permissions
+    if not is_session_valid(principal):
+        raise AccessDeniedError(
+            f"User {principal.user_id!r} session has expired"
+        )
+
     allowed = ROLE_PERMISSIONS.get(principal.role, set())
     if required not in allowed:
         raise AccessDeniedError(

@@ -8,7 +8,7 @@ Regulatory note: v1.0 is NOT a 21 CFR Part 11 compliant system.  Part 11
 technical controls are planned for v2.0.  See docs/10-21cfr-part11.md.
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
 
 from pkplugin.version import WNVersion
 
