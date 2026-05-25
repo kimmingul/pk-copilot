@@ -22,21 +22,28 @@
 
 | 버전 | 범위 | 상태 |
 |---|---|---|
-| v0.1 | NCA 단일대상자 (IV/PO) | 🚧 in progress |
-| v0.2 | 다대상자 NCA + BE 통계 | ⏳ 계획 |
-| v0.3 | 1/2/3-구획 모델링 | ⏳ 계획 |
-| v0.4 | PK/PD 연결 모델 (Emax, IDR) | ⏳ 계획 |
-| v0.5 | 리포트 + R 교차검증 | ⏳ 계획 |
-| **v1.0** | Production release (검증 가능, 규제 미주장) | ⏳ 계획 |
-| **v2.0** | **21 CFR Part 11 + CDISC SDTM/ADaM** | ⏳ 계획 |
+| v0.1 | NCA 단일대상자 (IV/PO) | ✅ 완료 |
+| v0.2 | 다대상자 NCA + BE 통계 | ✅ 완료 |
+| v0.3 | 1/2/3-구획 모델링 | ✅ 완료 |
+| v0.4 | PK/PD 연결 모델 (Emax, IDR) | ✅ 완료 |
+| v0.5 | 리포트 + R 교차검증 | ✅ 완료 |
+| **v1.0** | Production release (검증 가능, 규제 미주장) | ✅ [Released](https://github.com/kimmingul/pk-copilot/releases/tag/v1.0.0) |
+| **v2.0** | **21 CFR Part 11 + CDISC SDTM/ADaM** | ✅ [Released](https://github.com/kimmingul/pk-copilot/releases/tag/v2.0.0) (현재) |
 
 ## 빠른 시작
 
-> 아직 개발 중입니다 (v0.0.0-dev).
+**현재 버전: v2.0.0** (Regulated Edition — CDISC + 21 CFR Part 11 기술 통제 포함)
 
 ```bash
-# 향후 설치 예정
+# Claude Code plugin (예정)
 claude plugin install pk-copilot
+
+# 또는 Python 패키지로 직접 설치
+git clone https://github.com/kimmingul/pk-copilot.git
+cd pk-copilot
+uv venv && uv pip install -e ".[dev,mcp,plot,report,cdisc,compliance]"
+uv run pkplugin --version  # 2.0.0
+uv run pkplugin doctor
 ```
 
 ## 슬래시 명령어
