@@ -555,3 +555,57 @@ def test_b14_load_dataset_skips_molar_concentration(tmp_path):
     # Values left as-is — caller must supply MW.
     assert df["concentration"].tolist() == [100.0, 80.0]
     assert any("molar" in w for w in rpt.warnings)
+
+
+# ---------------------------------------------------------------------------
+# Cleanup commit regression tests (literature review follow-ups)
+# ---------------------------------------------------------------------------
+
+
+def test_aucmethod_linear_log_alias_works():
+    """`linear_log` alias must produce identical results to `linear_up_log_down`."""
+    from pkplugin.nca.auc import auc_trapezoid
+
+    times = [0.0, 0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 24.0]
+    concs = [10.0, 7.788, 6.065, 3.679, 1.353, 0.183, 0.0247, 0.00335, 6.144e-5]
+    r1 = auc_trapezoid(times, concs, method="linear_up_log_down")
+    r2 = auc_trapezoid(times, concs, method="linear_log")  # type: ignore[arg-type]
+    assert r1.auc == r2.auc
+    assert r1.aumc == r2.aumc
+
+
+def test_analytic_predict_rejects_mm_models():
+    """analytic.predict refuses MM models with a clear ODE-routing hint."""
+    import pytest
+    from pkplugin.comp.analytic import predict
+
+    with pytest.raises(ValueError, match="Michaelis-Menten"):
+        predict(
+            model="cmt1_iv_mm",
+            params={"V": 10.0, "Vmax": 50.0, "Km": 5.0},
+            times=[0.5, 1.0, 2.0],
+            dose=100.0,
+        )
+
+
+def test_registry_includes_mm_models():
+    """MM models are discoverable via REGISTRY with has_michaelis_menten=True."""
+    from pkplugin.comp.models import REGISTRY
+
+    for name in ("cmt1_iv_mm", "cmt1_po_mm", "cmt2_iv_mm"):
+        assert name in REGISTRY
+        assert REGISTRY[name].has_michaelis_menten is True
+
+
+def test_mcp_simulate_pk_model_routes_mm_to_ode():
+    """impl_simulate_pk_model handles MM models via the ODE backend."""
+    from pkplugin.mcp_server import impl_simulate_pk_model
+
+    result = impl_simulate_pk_model(
+        model_name="cmt1_iv_mm",
+        params={"V": 10.0, "Vmax": 50.0, "Km": 5.0},
+        dose=100.0,
+        times=[0.5, 1.0, 2.0, 4.0, 8.0],
+    )
+    assert result["status"] == "ok"
+    assert len(result["concentrations"]) == 5

@@ -379,17 +379,25 @@ NCA/구획분석에서 계산된 PK 파라미터를 1행-1파라미터 long form
 | `Vz` | `VZ` | Volume of Distribution Based on Terminal Phase | mL |
 | `Vz_F` | `VZF` | Apparent Volume of Distribution Based on Terminal Phase | mL |
 | `Vss` | `VSS` | Volume of Distribution at Steady State (IV) | mL |
-| `MRT` | `MRT` | Mean Residence Time | h |
-| `AUCpct_extrap` | `AUCPEO` | AUC %Extrapolated (Observed) | % |
+| `MRTINF_obs` | `MRTIFO` | Mean Residence Time Infinity (Observed) | h |
 | `Lambda_z_lower` | `LAMZLL` | Lower Limit of Regression Time Range | h |
 | `Lambda_z_upper` | `LAMZUL` | Upper Limit of Regression Time Range | h |
-| `Lambda_z_r2` | `CORRXY` | Correlation Coefficient, Terminal Phase | — |
-| `Lambda_z_r2_adj` | `R2ADJ` | Adjusted R-Squared, Terminal Phase | — |
-| `Lambda_z_n_points` | `LAMZNPT` | Number of Points for Lambda_z | — |
-| `Cmax_ss` | `CMAXSS` | Maximum Steady-State Analyte Concentration | ng/mL |
-| `Cmin_ss` | `CMINSS` | Minimum Steady-State Analyte Concentration | ng/mL |
-| `AUCtau_ss` | `AUCTAU` | AUC over the Dosing Interval at Steady State | h*ng/mL |
-| `Cavg_ss` | `CAVGSS` | Average Steady-State Analyte Concentration | ng/mL |
+| `Rsq` | `R2` | R-Squared, Terminal Phase | — |
+| `Rsq_adjusted` | `R2ADJ` | Adjusted R-Squared, Terminal Phase | — |
+| `No_points_lambda_z` | `LAMZNPT` | Number of Points for Lambda_z | — |
+
+> **v2.0 구현 범위**: 위 표의 23개 PARAMCD가 `pkplugin.cdisc.paramcd.PARAMCD_REGISTRY` 에
+> 등록되어 있습니다. NCA single-dose 파라미터와 직접 매핑됩니다.
+>
+> **v2.1 예정 (steady-state + 추가 derived)**:
+> `CMAXSS`, `CMINSS`, `AUCTAU`, `CAVGSS` (정상상태 파라미터),
+> `AUCPEO` (AUC %Extrap, NCAResult 에 `AUC_%Extrap_obs` 로 이미 존재 — CDISC 매핑만 추가 필요),
+> `CORRXY` (Lambda_z 상관계수 — CDISC NCA CT에서 정의되지만 본 플러그인은
+> `R2`를 표준으로 사용 중).
+>
+> **명명 주의**: `MRT`는 일반 평균체류시간이지만 CDISC PK NCA CT 에서 `MRTIFO`는
+> 무한대로 외삽한 관찰 기반 MRT(`AUMCINF_obs / AUCINF_obs`)를 가리킵니다. 본 플러그인의
+> 엔진은 `MRTINF_obs`만 산출하므로 `MRTIFO`로 매핑합니다.
 
 ---
 

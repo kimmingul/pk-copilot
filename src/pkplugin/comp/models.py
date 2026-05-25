@@ -115,6 +115,34 @@ REGISTRY: dict[str, PKModelSpec] = {
         route=CompartmentRoute.IV_BOLUS,
         parameter_names=("V1", "k10", "k12", "k21", "k13", "k31"),
     ),
+    # ---- Michaelis-Menten variants (ODE-only; closed form does not exist) ----
+    # These are discoverable through REGISTRY so list_models()/CDISC tools see
+    # them, but ``pkplugin.comp.analytic.predict`` rejects them — they must be
+    # evaluated via ``pkplugin.comp.ode.simulate_ode``.
+    "cmt1_iv_mm": PKModelSpec(
+        name="cmt1_iv_mm",
+        winnonlin_model_id=2,
+        n_compartments=1,
+        route=CompartmentRoute.IV_BOLUS,
+        parameter_names=("V", "Vmax", "Km"),
+        has_michaelis_menten=True,
+    ),
+    "cmt1_po_mm": PKModelSpec(
+        name="cmt1_po_mm",
+        winnonlin_model_id=6,
+        n_compartments=1,
+        route=CompartmentRoute.ORAL,
+        parameter_names=("V_F", "ka", "Vmax", "Km"),
+        has_michaelis_menten=True,
+    ),
+    "cmt2_iv_mm": PKModelSpec(
+        name="cmt2_iv_mm",
+        winnonlin_model_id=8,
+        n_compartments=2,
+        route=CompartmentRoute.IV_BOLUS,
+        parameter_names=("V1", "Vmax", "Km", "k12", "k21"),
+        has_michaelis_menten=True,
+    ),
 }
 
 

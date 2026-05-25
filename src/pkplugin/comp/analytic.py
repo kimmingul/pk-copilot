@@ -87,6 +87,12 @@ def predict(
     Refs: docs/03-algorithms/08-compartmental-models.md §2
     """
     spec: PKModelSpec = get_model(model) if isinstance(model, str) else model
+    if spec.has_michaelis_menten:
+        raise ValueError(
+            f"Model {spec.name!r} uses Michaelis-Menten elimination and has "
+            "no closed-form solution. Use pkplugin.comp.ode.simulate_ode "
+            "instead."
+        )
     _validate_params(spec, params)
 
     t_arr = np.asarray(times, dtype=np.float64)
@@ -403,7 +409,7 @@ def _cmt2_po(
 
     τ = t - tlag; when τ < 0 → C = 0.
 
-    Refs: docs/03-algorithms/08-compartmental-models.md §2.5, WinNonlin model #11
+    Refs: docs/03-algorithms/08-compartmental-models.md §2.5 (2-cmt IV infusion / PO bundle), WinNonlin model #11
     """
     V1_F = params["V1_F"]
     ka = params["ka"]

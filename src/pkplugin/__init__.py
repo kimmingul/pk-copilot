@@ -1,11 +1,14 @@
 """pk-copilot — Phoenix WinNonlin-compatible PK/PD/NCA/Compartmental analysis.
 
-v1.0 Production Release.  All NCA, BE, compartmental PK, and PD workflows are
-available via both the MCP server (``pkplugin.mcp_server``) and the CLI
-(``pkplugin`` console script).
+v2.0 Regulated Edition.  All NCA, BE, compartmental PK, PD, CDISC SDTM/ADaM,
+and 21 CFR Part 11 technical controls are available via both the MCP server
+(``pkplugin.mcp_server``) and the CLI (``pkplugin`` console script).
 
-Regulatory note: v1.0 is NOT a 21 CFR Part 11 compliant system.  Part 11
-technical controls are planned for v2.0.  See docs/10-21cfr-part11.md.
+Regulatory note: v2.0 provides the TECHNICAL controls (audit chain,
+e-signatures, RBAC, WORM lock) needed for 21 CFR Part 11 workflows.
+Procedural controls (SOPs, training records, account governance, periodic
+audit review) remain the customer organization's responsibility.  See
+docs/10-21cfr-part11.md §16 for the full disclaimer and compliance matrix.
 """
 
 __version__ = "2.0.0"

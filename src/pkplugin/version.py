@@ -54,6 +54,10 @@ DEFAULTS: dict[WNVersion, dict[str, Any]] = {
             "embedded": "missing",
             "trailing": "exclude",
         },
+        # WinNonlin 5.3 did not emit a span-ratio warning. We keep a
+        # conservative default of 1.5 (matching 6.4+) so users moving
+        # between versions are not surprised by silent omission of a
+        # clinically meaningful guard. Set to 0.0 to disable entirely.
         "span_ratio_min": 1.5,
         "comp_weighting_default": "uniform",
     },

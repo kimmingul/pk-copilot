@@ -859,8 +859,15 @@ def impl_simulate_pk_model(
         }
 
     try:
-        # For ODE-only MM models, route through simulate_ode directly
-        if model_name not in REGISTRY:
+        # ODE-only models (Michaelis-Menten variants) bypass the closed-form
+        # path. They live in REGISTRY for discoverability but have
+        # has_michaelis_menten=True. Plain non-REGISTRY names also route to ODE
+        # as a defensive fallback.
+        spec_lookup = REGISTRY.get(model_name)
+        is_ode_only = (
+            spec_lookup is None or spec_lookup.has_michaelis_menten
+        )
+        if is_ode_only:
             from pkplugin.comp.ode import DosingEvent, simulate_ode, simulate_ode_with_tlag
             import numpy as np
 

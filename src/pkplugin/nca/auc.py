@@ -30,7 +30,21 @@ from typing import Literal, Sequence
 
 import numpy as np
 
-AUCMethod = Literal["linear", "log", "linear_up_log_down"]
+AUCMethod = Literal["linear", "log", "linear_up_log_down", "linear_log"]
+
+# ``"linear_log"`` is an alias for ``"linear_up_log_down"`` (documented in
+# docs/03-algorithms/02-auc-methods.md §0).  It is normalised inside
+# ``auc_trapezoid``/``partial_auc`` rather than at the type boundary so the
+# Literal accepts both spellings.
+_LINEAR_LOG_ALIAS = "linear_log"
+_LINEAR_UP_LOG_DOWN = "linear_up_log_down"
+
+
+def _normalise_method(method: AUCMethod | str) -> AUCMethod:
+    """Resolve ``linear_log`` alias to ``linear_up_log_down``."""
+    if method == _LINEAR_LOG_ALIAS:
+        return _LINEAR_UP_LOG_DOWN  # type: ignore[return-value]
+    return method  # type: ignore[return-value]
 
 
 @dataclass(frozen=True)
@@ -152,6 +166,8 @@ def auc_trapezoid(
         )
     if not np.all(np.diff(t_arr) > 0):
         raise ValueError("times must be strictly increasing.")
+
+    method = _normalise_method(method)
 
     total_auc = 0.0
     total_aumc = 0.0
@@ -364,6 +380,8 @@ def partial_auc(
     """
     if t1 >= t2:
         raise ValueError(f"t1 must be strictly less than t2; got t1={t1}, t2={t2}.")
+
+    method = _normalise_method(method)
 
     t_arr = np.asarray(times, dtype=np.float64)
     c_arr = np.asarray(concentrations, dtype=np.float64)
