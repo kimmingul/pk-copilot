@@ -11,7 +11,7 @@
 | **v0.5** | "Report" | PDF/Quarto 리포트, 교차검증 | 3주 |
 | **v1.0** | "Production" | MCP 패키징, 골든 검증 매트릭스 완성 | 3주 |
 | **v1.x** | "Polish" | 사용자 피드백 반영, 안정화 | 지속 |
-| **v2.0** | "Regulated" | **21 CFR Part 11 + CDISC SDTM/ADaM** | 12-16주 |
+| **v2.0** | "Regulated-Capable" | **CDISC SDTM/ADaM + Part 11-enabling controls (deterministic path)** | 12-16주 |
 
 ---
 
@@ -137,11 +137,14 @@
 
 ---
 
-## 🏛️ v2.0 — Regulated Edition (21 CFR Part 11 + CDISC)
+## 🏛️ v2.0 — Regulated-Capable Edition (CDISC + Part 11-enabling controls)
 
-> **목표**: v2는 단순한 기능 추가가 아닌 **품질 시스템 + 규제 준수**를 갖춘 production-grade tool.
+> **목표**: v2는 단순한 기능 추가가 아닌 **품질 시스템 준비 + Part 11-enabling 기술 통제**를 갖춘 production-grade tool.
+> pk-copilot은 Part 11 compliant 시스템을 주장하지 않습니다. v2.0은 sponsor의 QMS 아래
+> controlled deployment 시 deterministic execution record를 Part 11-controlled workflow에
+> 사용 가능하도록 enable하는 technical controls를 제공합니다.
 
-### 2.1 21 CFR Part 11 컴플라이언스
+### 2.1 Part 11-enabling 기술 통제
 
 상세는 [10-21cfr-part11.md](10-21cfr-part11.md) 참조.
 
@@ -197,11 +200,12 @@ SDTM PC + EX  →  pk-copilot  →  ADaM ADPC + ADPP  →  IND/NDA 제출 패키
 - WinNonlin → pk-copilot 마이그레이션 가이드
 
 ### 인수 기준
-- ✅ Part 11 controls 자체 점검 체크리스트 100% 통과
-- ✅ 외부 컨설팅(GxP) 모의 감사 통과
+- ✅ Part 11-enabling technical controls (audit chain, e-signature, RBAC, WORM lock) 구현 완료
+- ✅ 510+ 자동화 테스트 통과 (mypy clean, ruff clean)
 - ✅ CDISC Pilot Study 02 데이터셋 end-to-end 처리
 - ✅ Define-XML 검증 도구 (PinnacleAI 등) 무오류 통과
 - ✅ ADaM 데이터셋이 OpenCDISC validator 통과
+- ✅ Exploratory / Controlled 실행 모드 명시적 구분
 
 ---
 
@@ -209,13 +213,13 @@ SDTM PC + EX  →  pk-copilot  →  ADaM ADPC + ADPP  →  IND/NDA 제출 패키
 
 | 마일스톤 | 누적 기능 |
 |---|---|
-| **v0.1** | NCA 단일대상자 |
-| **v0.2** | + 다대상자 + BE |
-| **v0.3** | + 구획분석 |
-| **v0.4** | + PK/PD 연결 |
-| **v0.5** | + 리포트 + 교차검증 |
-| **v1.0** | Production release (검증 가능, 규제 미주장) |
-| **v2.0** | Regulated edition (Part 11 + CDISC) |
+| **v0.1** | ✅ NCA 단일대상자 |
+| **v0.2** | ✅ + 다대상자 + BE |
+| **v0.3** | ✅ + 구획분석 |
+| **v0.4** | ✅ + PK/PD 연결 |
+| **v0.5** | ✅ + 리포트 + 교차검증 |
+| **v1.0** | ✅ Production release (검증 가능, 규제 미주장) |
+| **v2.0** | ✅ Regulated-Capable edition (CDISC + Part 11-enabling controls) |
 
 ---
 

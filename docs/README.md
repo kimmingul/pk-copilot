@@ -46,8 +46,15 @@
 |---|---|
 | [08-validation-strategy.md](08-validation-strategy.md) | Golden test, GxP IQ/OQ/PQ |
 | [09-cdisc-support.md](09-cdisc-support.md) | **v2: CDISC SDTM / ADaM 지원** |
-| [10-21cfr-part11.md](10-21cfr-part11.md) | **v2: 21 CFR Part 11 compliance plan** |
+| [10-21cfr-part11.md](10-21cfr-part11.md) | **v2: Part 11-enabling controls, Execution Modes (§17), 면책 (§16)** |
 | [11-development-workflow.md](11-development-workflow.md) | 개발자 가이드, 테스트, 릴리즈 |
+
+### 5. 규제 / 책임 경계 (v2.0.1 포지셔닝 명확화)
+| 문서 | 내용 |
+|---|---|
+| [12-intended-use.md](12-intended-use.md) | **Intended Use Statement** — 의도된 사용 목적, 사용자, 워크플로우, 책임 |
+| [13-compliance-matrix.md](13-compliance-matrix.md) | **책임 분리 매트릭스** — pk-copilot 제공 vs 사용자 조직 제공 |
+| [14-llm-boundary-disclosure.md](14-llm-boundary-disclosure.md) | **LLM 경계 공개** — LLM 역할, 비결정성 위험, deterministic kernel 분리 |
 
 ---
 

@@ -32,6 +32,7 @@ from pkplugin.audit import (
     new_entry,
     new_run_id,
 )
+from pkplugin.compliance import classify_execution_mode
 from pkplugin.ingest import (
     load_dataset,
     to_concentration_records,
@@ -46,6 +47,23 @@ from pkplugin.version import DEFAULTS, WNVersion
 # ---------------------------------------------------------------------------
 
 
+def _detect_llm_orchestrated() -> bool:
+    """Detect whether the current call is LLM-orchestrated.
+
+    Reads PKPLUGIN_LLM_ORCHESTRATED env var:
+    - "0" → False (explicit CLI/direct call)
+    - "1" → True  (explicit LLM orchestration)
+    - unset → True (default: MCP server context implies LLM orchestration)
+    """
+    val = os.environ.get("PKPLUGIN_LLM_ORCHESTRATED")
+    if val == "0":
+        return False
+    if val == "1":
+        return True
+    # Default: MCP server context implies LLM orchestration
+    return True
+
+
 def _emit_chain_entry(
     run_dir: Path,
     action: str,
@@ -53,6 +71,8 @@ def _emit_chain_entry(
     reason: str,
     run_id: str,
     after: dict[str, Any] | None = None,
+    execution_mode: str = "exploratory",
+    llm_orchestrated: bool = False,
 ) -> None:
     """Best-effort audit chain emission.
 
@@ -76,6 +96,8 @@ def _emit_chain_entry(
             reason=reason,
             run_id=run_id,
             after=after,
+            execution_mode=execution_mode,
+            llm_orchestrated=llm_orchestrated,
         )
     except Exception as _exc:
         logger.warning("_emit_chain_entry failed for action=%r run_id=%r: %s", action, run_id, _exc)
@@ -197,11 +219,15 @@ def impl_run_nca(
     subjects: list[str] | None = None,
     analytes: list[str] | None = None,
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run NCA + write audit + produce executable re-run script.
 
     Refs: docs/06-mcp-server.md §2
     """
+    mode = classify_execution_mode(user=user)
+    llm_orch = _detect_llm_orchestrated()
+
     ds_path = Path(dataset_path).resolve()
     if not ds_path.is_file():
         return {"status": "error", "error": f"Dataset not found: {ds_path}"}
@@ -277,6 +303,8 @@ def impl_run_nca(
         config=_serialise_for_json(nca_cfg.model_dump()),
         input_paths=input_paths,
         winnonlin_compat=nca_cfg.winnonlin_version,
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
     run_id = entry.run_id
 
@@ -338,10 +366,12 @@ def impl_run_nca(
     _emit_chain_entry(
         run_dir=run_dir,
         action="run_nca",
-        user=None,
+        user=user,
         reason="NCA analysis run",
         run_id=run_id,
         after={"run_state": "draft", "n_subjects": len(results)},
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
 
     # Summary of headline parameters per subject for the chat response
@@ -366,6 +396,7 @@ def impl_run_nca(
         "script_path": str(script_path),
         "parameter_summary": parameter_summary,
         "warnings": all_warnings,
+        "execution_mode": mode,
     }
 
 
@@ -432,6 +463,7 @@ def impl_run_be(
     be_window_high: float = 125.0,
     winnonlin_version: str = "6.4",
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Run bioequivalence analysis + emit audit.
 
@@ -441,6 +473,9 @@ def impl_run_be(
 
     Refs: docs/06-mcp-server.md §3
     """
+    mode = classify_execution_mode(user=user)
+    llm_orch = _detect_llm_orchestrated()
+
     from pkplugin.nca.bioequivalence import run_bioequivalence
 
     ds_path = Path(parameter_dataset_path).resolve()
@@ -515,6 +550,8 @@ def impl_run_be(
         },
         input_paths=[ds_path],
         winnonlin_compat=winnonlin_version,
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
     run_id = entry.run_id
 
@@ -560,10 +597,12 @@ def impl_run_be(
     _emit_chain_entry(
         run_dir=run_dir,
         action="run_be",
-        user=None,
+        user=user,
         reason="BE analysis run",
         run_id=run_id,
         after={"run_state": "draft", "be_demonstrated": result.be_demonstrated},
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
 
     return {
@@ -572,6 +611,7 @@ def impl_run_be(
         "audit_path": str(audit_json_path),
         "be_result": be_result_dict,
         "warnings": result.warnings,
+        "execution_mode": mode,
     }
 
 
@@ -910,6 +950,7 @@ def impl_fit_pk_model(
     use_ode: bool = False,
     winnonlin_version: str = "6.4",
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Fit a PK compartmental model and emit audit + write fit artifacts.
 
@@ -927,6 +968,9 @@ def impl_fit_pk_model(
 
     Refs: docs/03-algorithms/08-compartmental-models.md §4–§6
     """
+    mode = classify_execution_mode(user=user)
+    llm_orch = _detect_llm_orchestrated()
+
     from pkplugin.comp.fitting import (
         FitResult,
     )
@@ -1081,6 +1125,8 @@ def impl_fit_pk_model(
         },
         input_paths=input_paths,
         winnonlin_compat=winnonlin_version,
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
     run_id = entry.run_id
 
@@ -1148,10 +1194,12 @@ def impl_fit_pk_model(
     _emit_chain_entry(
         run_dir=run_dir,
         action="fit_pk_model",
-        user=None,
+        user=user,
         reason="PK model fitting run",
         run_id=run_id,
         after={"run_state": "draft", "model_name": model_name},
+        execution_mode=mode,
+        llm_orchestrated=llm_orch,
     )
 
     return {
@@ -1165,6 +1213,7 @@ def impl_fit_pk_model(
         "parameters": parameters,
         "diagnostics": diagnostics,
         "warnings": fit.warnings,
+        "execution_mode": mode,
     }
 
 
@@ -1303,6 +1352,7 @@ def impl_fit_pd_model(
     weighting: str = "uniform",
     winnonlin_version: str = "6.4",
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Fit a PD model to effect-time data and emit audit.
 
@@ -1316,6 +1366,9 @@ def impl_fit_pd_model(
 
     Refs: docs/03-algorithms/09-pkpd-models.md §2
     """
+    exec_mode = classify_execution_mode(user=user)
+    llm_orch = _detect_llm_orchestrated()
+
     from pkplugin.pd.fitting import PDFitResult
     from pkplugin.pd.fitting import fit_pd_model as _fit_pd_model
     from pkplugin.pd.models import PD_REGISTRY
@@ -1403,6 +1456,8 @@ def impl_fit_pd_model(
         },
         input_paths=[ds_path],
         winnonlin_compat=winnonlin_version,
+        execution_mode=exec_mode,
+        llm_orchestrated=llm_orch,
     )
     run_id = entry.run_id
 
@@ -1445,10 +1500,12 @@ def impl_fit_pd_model(
     _emit_chain_entry(
         run_dir=run_dir,
         action="fit_pd_model",
-        user=None,
+        user=user,
         reason="PD model fitting run",
         run_id=run_id,
         after={"run_state": "draft", "model_name": model_name},
+        execution_mode=exec_mode,
+        llm_orchestrated=llm_orch,
     )
 
     return {
@@ -1460,6 +1517,7 @@ def impl_fit_pd_model(
         "parameters": parameters,
         "diagnostics": diagnostics,
         "warnings": fit.warnings,
+        "execution_mode": exec_mode,
     }
 
 
@@ -2142,6 +2200,7 @@ def impl_sign_record(
     private_key_path: str,
     passphrase: str | None = None,
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Sign a run bundle with an Ed25519 key and record the event in the audit chain.
 
@@ -2153,7 +2212,10 @@ def impl_sign_record(
         private_key_path: Path to Ed25519 private key PEM file.
         passphrase: Key passphrase if encrypted.
         audit_dir: Base audit directory (default: PKPLUGIN_AUDIT_DIR or pk_runs/).
+        user: User identity dict (required for controlled execution mode).
     """
+    sign_mode = classify_execution_mode(user=user)
+
     try:
         from pkplugin.compliance.audit_chain import AuditChain
         from pkplugin.compliance.signatures import sign_run
@@ -2212,6 +2274,8 @@ def impl_sign_record(
             run_id=run_id,
             before=None,
             after={"meaning": meaning, "run_hash": sig.run_hash},
+            execution_mode=sign_mode,
+            llm_orchestrated=_detect_llm_orchestrated(),
         )
     except Exception:
         pass  # chain emission is best-effort; signature already written
@@ -2225,6 +2289,7 @@ def impl_sign_record(
         "timestamp_utc": sig.timestamp_utc,
         "run_hash": sig.run_hash,
         "public_key_hex": sig.public_key_hex[:16] + "...",
+        "execution_mode": sign_mode,
     }
 
 
@@ -2234,6 +2299,7 @@ def impl_lock_run(
     lock_reason: str,
     require_signatures: list[str] | None = None,
     audit_dir: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Finalize a run bundle: verify signatures, compute hash, set read-only.
 
@@ -2243,7 +2309,10 @@ def impl_lock_run(
         lock_reason: Non-empty reason string.
         require_signatures: Signature meanings required (default: authored, reviewed, approved).
         audit_dir: Base audit directory.
+        user: User identity dict (required for controlled execution mode).
     """
+    lock_mode = classify_execution_mode(user=user)
+
     try:
         from pkplugin.compliance.audit_chain import AuditChain
         from pkplugin.compliance.retention import lock_run
@@ -2276,6 +2345,8 @@ def impl_lock_run(
             run_id=run_id,
             before={"locked": False},
             after={"locked": True},
+            execution_mode=lock_mode,
+            llm_orchestrated=_detect_llm_orchestrated(),
         )
     except Exception as exc:
         return {"status": "error", "error": f"Audit chain append failed — lock aborted: {exc}"}
@@ -2297,6 +2368,7 @@ def impl_lock_run(
         "locked_by": manifest.locked_by,
         "bundle_sha256": manifest.bundle_sha256,
         "signatures_required": manifest.signatures_required,
+        "execution_mode": lock_mode,
     }
 
 
@@ -2437,11 +2509,21 @@ def impl_get_compliance_status() -> dict[str, Any]:
     }
 
     disclaimer = (
-        "pk-copilot v2.0 provides technical controls to support Part 11 workflows. "
-        "21 CFR Part 11 compliance requires procedural controls by your organization. "
-        "See docs/10-21cfr-part11.md §16 for the full disclaimer."
+        "pk-copilot v2.0 provides Part 11-enabling technical controls for the "
+        "deterministic CLI/MCP execution path. Records produced by this path "
+        "can be used in Part 11-controlled workflows when deployed and "
+        "validated under the customer's QMS. LLM/chat orchestration is "
+        "exploratory unless qualified. pk-copilot is NOT a 21 CFR Part 11 "
+        "compliant system on its own. See docs/10-21cfr-part11.md §16-§17."
     )
     status["disclaimer"] = disclaimer
+    status["execution_mode_supported"] = ["exploratory", "controlled"]
+    status["current_mode_hint"] = (
+        "Determined by entry point — CLI path with PKPLUGIN_PART11_ENABLED=1 "
+        "+ user → controlled candidate; chat path → exploratory unless "
+        "qualified under customer QMS."
+    )
+    status["part11_claim"] = "enabling-controls-only"
 
     return status
 

@@ -12,7 +12,7 @@
 2. **버전 인식 (Version-Aware)**: WinNonlin 5.3 / 6.4 / 8.3 간 알고리즘·기본값 차이를 사용자가 선택 가능
 3. **AI 가속화**: 데이터 클리닝, 컬럼 매핑, 단위 변환, 보고서 초안 작성 등 보일러플레이트 작업 자동화
 4. **재현성 (Reproducibility)**: 모든 분석은 JSON-of-record + 실행 스크립트로 저장
-5. **규제 준비 (v2)**: 21 CFR Part 11 compliance + CDISC SDTM/ADaM 표준 지원
+5. **규제 준비 (v2)**: Part 11-enabling controls (deterministic path) + CDISC SDTM/ADaM 표준 지원
 
 ---
 
@@ -46,7 +46,7 @@
 | Phoenix WinNonlin GUI/파일 포맷 복제 | 트레이드마크 / 호환성 리스크 |
 | 자체 popPK SAEM/FOCE 구현 (v1) | nlmixr2 / NONMEM 위임 — 검증 비용 과다 |
 | PBPK, IVIVC, adaptive trial sim | 범위 외 |
-| **v1**: 21 CFR Part 11 compliant 주장 | **v2에서 정식 지원** |
+| **v1**: 21 CFR Part 11 compliant 주장 | **v2에서 Part 11-enabling controls 제공 (compliant 주장은 v2에서도 금지)** |
 
 ---
 
@@ -80,9 +80,56 @@
 - ✅ 모든 알고리즘이 매뉴얼 페이지 인용으로 추적 가능
 
 ### v2
-- ✅ 21 CFR Part 11 controls (audit trail, e-signature, access control) 통과
+- ✅ Part 11-enabling technical controls (audit chain, e-signature, RBAC, WORM lock) 결정론적 경로에 제공
 - ✅ CDISC SDTM PC/EX 도메인 직접 입력 + ADaM ADPC/ADPP 출력
-- ✅ 외부 GxP 컨설팅 감사에서 IQ/OQ/PQ 산출물 인정
+- ✅ IQ/OQ/PQ 검증 패키지 제공 (customer QMS 하에서 실행 가능)
+
+---
+
+---
+
+## ⚖️ Regulatory Scope
+
+### Predicate Rule 원칙
+
+21 CFR Part 11은 **다른 FDA 규정(predicate rule)이 유지·제출을 요구하는 전자기록에만 적용**됩니다.
+(참조: FDA 2003 Guidance "Part 11, Electronic Records; Electronic Signatures — Scope and Application")
+
+- IND 관련 기록: 21 CFR §312.57, §312.62
+- NDA/ANDA 제출 기록: 21 CFR §314.50
+- BE 연구 보고서: 21 CFR §320
+
+pk-copilot을 탐색적 분석·가설 검증·보고서 초안 작성에 사용하는 것 자체가 Part 11 범위에 자동 진입하는 것은 **아닙니다**. Part 11 의무 여부는 **조직의 predicate-rule 판단** 및 해당 기록의 규제 제출 여부에 달려 있습니다.
+
+### Exploratory vs Controlled 경계
+
+| 경계 | Exploratory Mode | Controlled Mode |
+|---|---|---|
+| **진입 경로** | Claude chat (기본값) | CLI / MCP tool + `PKPLUGIN_PART11_ENABLED=1` + user dict |
+| **감사 기록** | LLM transcript log (non-GxP) | HMAC hash-chain audit record (GxP candidate) |
+| **사용 가능** | 탐색적 분석, 가설 검증, 초안 | Part 11-controlled workflow (customer QMS 하에서) |
+| **사용 불가** | regulatory submission 직접 사용 | — |
+
+### pk-copilot은 Part 11 compliant 시스템이 아닙니다
+
+> **pk-copilot은 21 CFR Part 11 compliant 시스템이 아닙니다.**
+> v2.0은 sponsor의 QMS 아래 controlled deployment 시 deterministic execution record를
+> Part 11-controlled workflow에 사용 가능하도록 enable하는 technical controls를 제공합니다.
+> LLM/chat orchestration은 기본적으로 exploratory이며, 그 prompt·응답·model 메타데이터·
+> 사용자 승인·실행된 deterministic 명령이 customer QMS 아래 기록되는 경우에만
+> 통제된 경로의 일부가 됩니다.
+
+### LLM Orchestration 분리
+
+pk-copilot의 아키텍처는 두 계층으로 구성됩니다:
+
+1. **LLM 오케스트레이션 계층** (exploratory): 자연어 해석, 컬럼 매핑 제안, 모델 추천, 보고서 초안.
+   숫자 계산은 수행하지 않습니다.
+2. **Deterministic kernel** (controlled candidate): numpy/scipy/PKNCA-compatible 계산 엔진.
+   동일 입력 → 동일 출력이 보장되며, HMAC hash-chain audit record를 생성합니다.
+
+규제용 기록의 기준은 "approved deterministic execution"이며, LLM 자연어 출력이 아닙니다.
+상세는 [docs/14-llm-boundary-disclosure.md](14-llm-boundary-disclosure.md) 참조.
 
 ---
 
@@ -90,3 +137,6 @@
 
 - [01-architecture.md](01-architecture.md) — 플러그인 아키텍처
 - [02-roadmap.md](02-roadmap.md) — 단계별 빌드 계획
+- [12-intended-use.md](12-intended-use.md) — Intended Use Statement
+- [13-compliance-matrix.md](13-compliance-matrix.md) — 책임 분리 매트릭스
+- [14-llm-boundary-disclosure.md](14-llm-boundary-disclosure.md) — LLM 경계 공개

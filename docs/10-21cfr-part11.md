@@ -44,14 +44,43 @@
 | Subpart | 제목 | 주요 조항 |
 |---|---|---|
 | **Subpart A** | General Provisions | §11.1 범위, §11.2 구현, §11.3 정의 |
-| **Subpart B** | Electronic Records | §11.10 Open systems 통제, §11.30 Closed systems, §11.50 서명 구성요소 |
-| **Subpart C** | Electronic Signatures | §11.100 일반, §11.200 서명 컴포넌트, §11.300 신원 확인 |
+| **Subpart B** | Electronic Records | §11.10 Closed systems 통제, §11.30 Open systems 추가 통제, §11.50 서명 manifestations (구성요소 표시), §11.70 서명-기록 연결 |
+| **Subpart C** | Electronic Signatures | §11.100 일반 요건, §11.200 비생물지표 서명 컴포넌트 및 통제, §11.300 식별 코드/비밀번호 통제 |
+
+> **정정 노트 (Codex review, 2026-05-25)**: 이전 버전에서 §11.10과 §11.30의 위치가 혼용되었습니다.
+> 올바른 매핑: §11.10 = closed systems controls (서버/워크스테이션 등 접근 제한 가능 시스템),
+> §11.30 = open systems controls (인터넷 등 접근 제한 불가 환경 추가 요건),
+> §11.50 = signature manifestations (서명 표시 요건 — 이름·날짜·의미 3필드),
+> §11.70 = signature/record linking (서명과 기록의 불가분 연결),
+> §11.200 = electronic signature components and controls (non-biometric),
+> §11.300 = controls for identification codes/passwords.
 
 ### 핵심 정의 (§11.3)
 
 - **Electronic Record**: 전자적 매체에 저장되거나 컴퓨터 시스템에 의해 생성·수정·유지·보관·검색·전송되는 텍스트, 그래픽, 데이터, 오디오, 기록
 - **Electronic Signature**: 개인에게 귀속되며 해당 개인에 의해 실행·채택된 전자적 형태의 기호 모음
 - **Audit Trail**: 시스템 활동에 대한 연대기적(chronological) 기록
+
+### Predicate Rule — Part 11 적용 범위
+
+> **핵심 원칙**: 21 CFR Part 11은 **다른 FDA 규정(predicate rule)이 유지·제출을 요구하는
+> 전자기록에만 적용**됩니다. pk-copilot 단순 사용은 Part 11 범위에 자동 진입하지 않습니다.
+
+FDA 2003 Guidance "Part 11, Electronic Records; Electronic Signatures — Scope and Application"에 따르면:
+- Part 11은 규제 요건이 있는 **특정 기록 유형**에만 적용됩니다.
+- 해당 기록이 전자적 형태로 생성·유지될 때에만 Part 11이 발동합니다.
+
+**Part 11이 발동하는 predicate rule 예시**:
+- IND 관련 기록: 21 CFR §312.57 (연구 기록), §312.62 (임상시험 기록)
+- NDA/ANDA 제출 기록: 21 CFR §314.50
+- BE 연구 보고서: 21 CFR §320
+- GMP 제조 기록: 21 CFR §211 (if computer-generated)
+
+**pk-copilot 사용 시 Part 11 적용 여부 판단**:
+1. 해당 분석 기록이 어떤 FDA 규정(predicate rule)에 의해 유지·제출 의무가 있는지 확인
+2. 해당 기록이 전자적 형태로 생성·유지되는지 확인
+3. 두 조건 모두 해당할 때에만 Part 11 통제 적용 의무 발생
+4. **판단 책임은 사용자 조직(QA/RA 팀)에 있습니다** — pk-copilot이 대신 판단하지 않습니다.
 
 ### EMA Annex 11 동등성
 
@@ -890,6 +919,14 @@ pkplugin audit export --run-id 2026-05-25-042 --output run-042-audit.zip
 
 ## 16. 공식 면책 고지 (Disclaimer)
 
+### 핵심 단언 (강화됨)
+
+> **pk-copilot은 21 CFR Part 11 compliant 시스템이 아닙니다.**
+>
+> v2.0은 sponsor의 QMS 아래 controlled deployment 시 deterministic execution record를
+> Part 11-controlled workflow에 사용 가능하도록 enable하는 **Part 11-enabling technical controls**를
+> 제공합니다. "Part 11-enabling"과 "Part 11 compliant"는 다릅니다.
+
 ### README 및 제품 페이지 필수 문구
 
 아래 고지는 제품 README, 제품 페이지, 문서 홈페이지에 **그대로** 포함되어야 합니다:
@@ -898,18 +935,28 @@ pkplugin audit export --run-id 2026-05-25-042 --output run-042-audit.zip
 ────────────────────────────────────────────────────────────────
 21 CFR Part 11 NOTICE
 
-pk-copilot v2.0 provides technical controls designed to support
-workflows subject to 21 CFR Part 11 (Electronic Records; Electronic
-Signatures). These controls include an append-only, hash-chained
-audit trail; Ed25519 electronic signatures with two-factor
-authentication; role-based access control; and WORM-capable
-storage backends.
+pk-copilot v2.0 is NOT a 21 CFR Part 11 compliant system.
 
-However, 21 CFR Part 11 compliance is a property of an entire
-quality system — not a single software tool. Deploying pk-copilot
-alone does NOT constitute Part 11 compliance.
+pk-copilot v2.0 provides Part 11-enabling technical controls for
+the deterministic CLI/MCP execution path. These controls include
+an append-only, hash-chained audit trail (HMAC-SHA256); Ed25519
+electronic signatures with two-factor authentication; role-based
+access control (RBAC); and WORM-capable storage backends.
+
+Records produced by the deterministic execution path can be used
+in Part 11-controlled workflows when deployed and validated under
+the customer's Quality Management System (QMS).
+
+LLM/chat orchestration is exploratory by default and is NOT part
+of the controlled execution path unless explicitly captured under
+customer QMS procedures.
+
+21 CFR Part 11 compliance is a property of an entire quality
+system — not a single software tool. Deploying pk-copilot alone
+does NOT constitute Part 11 compliance.
 
 Your organization remains responsible for:
+  - Predicate-rule determination (which records require Part 11)
   - Written SOPs for account management, training, change control,
     deviation handling, and record retention
   - User training records
@@ -918,6 +965,7 @@ Your organization remains responsible for:
   - Periodic audit log review
   - Physical security and network security
   - Backup and disaster recovery testing
+  - LLM provider model qualification (if LLM output enters controlled records)
 
 pk-copilot makes no claim of FDA certification, GxP certification,
 or ISO 13485 certification. The tool has not been reviewed or
@@ -925,6 +973,9 @@ endorsed by FDA.
 
 Contact your organization's Quality Assurance and Regulatory Affairs
 teams before deploying pk-copilot in a regulated environment.
+
+See §17 (Execution Modes & LLM-in-the-Loop Boundary) for the
+two-mode architecture and audit chain separation.
 ────────────────────────────────────────────────────────────────
 ```
 
@@ -934,30 +985,160 @@ teams before deploying pk-copilot in a regulated environment.
 ────────────────────────────────────────────────────────────────
 21 CFR Part 11 관련 고지
 
-pk-copilot v2.0은 21 CFR Part 11(전자 기록 및 전자서명)의 요건을
-지원하기 위한 기술적 통제를 제공합니다. 여기에는 추가 전용(append-only)
-해시 체인 감사 추적, 2단계 인증 기반 Ed25519 전자서명, 역할 기반
-접근 통제, WORM 스토리지 백엔드가 포함됩니다.
+pk-copilot v2.0은 21 CFR Part 11 compliant 시스템이 아닙니다.
 
-그러나 21 CFR Part 11 준수는 소프트웨어 도구 단독이 아닌
-품질 시스템 전체의 속성입니다. pk-copilot 설치만으로는
-Part 11 준수가 성립되지 않습니다.
+pk-copilot v2.0은 결정론적 CLI/MCP 실행 경로에 대해
+Part 11-enabling 기술 통제를 제공합니다. 여기에는 추가 전용
+(append-only) HMAC 해시 체인 감사 추적, 2단계 인증 기반
+Ed25519 전자서명, 역할 기반 접근 통제(RBAC),
+WORM 스토리지 백엔드가 포함됩니다.
+
+결정론적 실행 경로에서 생성된 기록은 사용자 조직의 QMS 아래
+검증·배포 시 Part 11-controlled workflow에 사용 가능합니다.
+
+LLM/chat orchestration은 기본적으로 exploratory이며, 조직의
+QMS 절차 아래 명시적으로 포착되지 않는 한 통제된 실행 경로의
+일부가 아닙니다.
+
+21 CFR Part 11 준수는 소프트웨어 도구 단독이 아닌 품질 시스템
+전체의 속성입니다. pk-copilot 설치만으로는 Part 11 준수가
+성립되지 않습니다.
 
 사용자 조직은 다음에 대한 책임을 집니다:
+  - Predicate-rule 판단 (어떤 기록에 Part 11이 적용되는지)
   - 계정 관리, 교육, 변경 통제, 일탈 처리, 기록 보존에 관한 SOP
   - 사용자 교육 기록 유지
   - IQ/OQ/PQ 검증 실행 및 검증 보고서 승인
   - 감사 로그 주기적 검토
   - 물리적 보안 및 네트워크 보안
   - 백업 및 재해 복구 테스트
+  - LLM 제공업체 모델 적격성 평가 (LLM 출력이 통제 기록에 진입하는 경우)
 
 pk-copilot은 FDA 인증, GxP 인증, 또는 기타 규제 기관 인증을
 주장하지 않습니다.
 
 규제 환경에 pk-copilot을 배포하기 전에 반드시 조직의
 품질보증(QA) 및 허가 규제(RA) 팀과 협의하십시오.
+
+§17 (Execution Modes & LLM-in-the-Loop Boundary) 참조.
 ────────────────────────────────────────────────────────────────
 ```
+
+---
+
+---
+
+## 17. Execution Modes & LLM-in-the-Loop Boundary
+
+이 섹션은 pk-copilot v2.0의 두 가지 실행 모드를 정의하고, LLM 오케스트레이션과
+deterministic kernel 사이의 감사 경계를 명확히 합니다.
+
+### 17.1 Exploratory Mode
+
+**정의**: LLM(Claude)이 자연어 입력을 해석하고 분석 명령을 제안하는 기본 모드.
+
+| 항목 | 내용 |
+|---|---|
+| **진입 경로** | Claude chat (기본값); env 미설정 |
+| **Audit chain emission** | Off — LLM transcript log만 기록 (non-GxP) |
+| **사용 가능 범위** | 탐색적 분석, 가설 검증, 모델 선택, 보고서 초안 |
+| **사용 불가 범위** | regulatory submission 직접 사용, controlled 기록 생성 |
+| **LLM 역할** | 의도 해석, 컬럼 매핑 제안, 모델 추천, 내러티브 작성 |
+| **숫자 계산** | LLM이 수행하지 않음 — 모든 계산은 deterministic kernel |
+
+> ⚠ Exploratory mode의 LLM 출력(수치 해석, 모델 권장, 보고서 초안)을
+> regulatory record로 직접 사용하지 마십시오.
+
+### 17.2 Controlled Execution Mode
+
+**정의**: HMAC hash-chain audit record를 생성하는 통제된 실행 경로.
+deterministic kernel만 실행되며, LLM 제안은 사용자 명시적 승인을 거쳐야 합니다.
+
+| 항목 | 내용 |
+|---|---|
+| **진입 경로** | CLI (`pkplugin nca ...`) 또는 MCP tool with `PKPLUGIN_PART11_ENABLED=1` + user dict |
+| **Audit chain emission** | On — HMAC-SHA256 hash-chained execution record |
+| **Suitable for** | Part 11-controlled workflow (customer QMS 하에서) |
+| **LLM 역할** | 제안만 제공 — 사용자 승인 없이 controlled 실행 불가 |
+| **결과 재현성** | 동일 입력 해시 + 동일 config → 동일 수치 결과 보장 |
+
+**활성화 방법**:
+```bash
+# 환경 변수 설정
+export PKPLUGIN_PART11_ENABLED=1
+
+# CLI 실행 (controlled candidate)
+pkplugin nca data.csv --user analyst@example.com
+
+# MCP 호출 (controlled candidate)
+# user dict 필수: {"id": "analyst@example.com", "role": "analyst"}
+```
+
+### 17.3 Validated Deployment Package
+
+controlled mode에서 Part 11-controlled workflow를 구성하려면 다음이 필요합니다:
+
+| 항목 | pk-copilot 제공 | 조직 책임 |
+|---|---|---|
+| IQ (Installation Qualification) | ✅ 스크립트 제공 | 실행 및 보고서 서명 |
+| OQ (Operational Qualification) | ✅ 자동 테스트 제공 | 실행 및 결과 검토·서명 |
+| PQ (Performance Qualification) | ✅ Golden dataset 매트릭스 | 실행 및 결과 검토·서명 |
+| Validation Master Plan template | ✅ 템플릿 제공 | 조직 맞춤화 후 승인 |
+| Role matrix | ✅ Viewer/Analyst/Approver/Admin | 역할 할당 승인 문서화 |
+| Audit review SOP template | ✅ SOP-QA-002 템플릿 | 조직 맞춤화 후 시행 |
+
+### 17.4 Execution Mode 데이터 흐름 다이어그램
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│  EXPLORATORY MODE (기본값)                                        │
+│                                                                  │
+│  사용자 (자연어)                                                   │
+│      │                                                           │
+│      ▼                                                           │
+│  [LLM 오케스트레이션]  ──→  LLM transcript log (non-GxP)          │
+│      │                      (탐색적 출처 증명용)                   │
+│      ▼                                                           │
+│  [Deterministic kernel]  ──→  결과 (audit chain INACTIVE)        │
+│                                                                  │
+│  ⚠ regulatory submission 직접 사용 금지                           │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│  CONTROLLED MODE (PKPLUGIN_PART11_ENABLED=1 + user dict)         │
+│                                                                  │
+│  사용자 (자연어 또는 CLI 명령)                                     │
+│      │                                                           │
+│      ▼                                                           │
+│  [LLM 제안]  ──→  LLM transcript log (non-GxP, 참조용)           │
+│      │                                                           │
+│      │  ← 사용자 명시적 승인 (이 승인이 audit chain에 기록)          │
+│      ▼                                                           │
+│  [Deterministic kernel 실행]                                     │
+│      │                                                           │
+│      ▼                                                           │
+│  [Audit chain emission]  ──→  HMAC hash-chain execution record   │
+│      │                        (GxP candidate)                    │
+│      ▼                                                           │
+│  [E-signature]  ──→  Ed25519 서명 (authored → reviewed → approved)│
+│      │                                                           │
+│      ▼                                                           │
+│  [WORM lock]  ──→  Signed bundle (customer QMS 검증 필요)         │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 17.5 Mode Switching Rules
+
+사용자가 두 모드를 명시적으로 선택하는 방법:
+
+| 전환 방향 | 방법 | 효과 |
+|---|---|---|
+| Exploratory → Controlled | `PKPLUGIN_PART11_ENABLED=1` 설정 + `--user` 플래그 | 이후 모든 실행에 audit chain 활성화 |
+| Controlled → Exploratory | env 변수 해제 또는 `PKPLUGIN_PART11_ENABLED=0` | audit chain 비활성화 (기존 기록 유지) |
+| 현재 모드 확인 | `pkplugin compliance-status` | `execution_mode_supported` + `current_mode_hint` 표시 |
+
+**중요**: mode switching은 실행 중인 run에 소급 적용되지 않습니다.
+이미 시작된 controlled run은 lock까지 controlled로 유지됩니다.
 
 ---
 
@@ -966,7 +1147,14 @@ pk-copilot은 FDA 인증, GxP 인증, 또는 기타 규제 기관 인증을
 | 버전 | 날짜 | 변경 내용 | 작성자 |
 |---|---|---|---|
 | 0.1 | 2026-05-25 | 초안 작성 — v2.0 Part 11 계획 전체 구조 | pk-copilot team |
+| 0.2 | 2026-05-25 | §1 predicate rule 추가; §3 Subpart 표 정정 (Codex review); §16 면책 강화 ("not compliant" 명시); §17 신규 (Execution Modes & LLM boundary) | pk-copilot team |
 
 ---
 
 *이 문서는 v2.0 Compliance Matrix의 공식 트레이서빌리티 기준입니다. 기술적 통제 구현 변경 시 이 문서의 Compliance Matrix (§5)를 동시에 갱신해야 합니다. ([README.md 기여 규칙](README.md) 참조)*
+
+## 다음 단계
+
+- [12-intended-use.md](12-intended-use.md) — Intended Use Statement
+- [13-compliance-matrix.md](13-compliance-matrix.md) — 책임 분리 매트릭스
+- [14-llm-boundary-disclosure.md](14-llm-boundary-disclosure.md) — LLM 경계 공개 (상세)

@@ -1,6 +1,6 @@
 # 09. CDISC 표준 지원 (v2.0)
 
-> **대상 버전**: pk-copilot v2.0 "Regulated Edition"
+> **대상 버전**: pk-copilot v2.0 "Regulated-Capable Edition"
 > **준거 표준**: CDISC SDTM Implementation Guide v3.4 / ADaM Implementation Guide v1.3
 
 ---

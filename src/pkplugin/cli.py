@@ -55,6 +55,22 @@ def _parse_init_params(raw: str) -> dict[str, float]:
 # ---------------------------------------------------------------------------
 
 
+def _print_mode_hint(mode: str) -> None:
+    """Print a one-line execution mode hint to stderr."""
+    if mode == "controlled":
+        print(
+            "[mode: controlled — under your QMS validation only; "
+            "verify with `pkplugin verify-chain`]",
+            file=sys.stderr,
+        )
+    else:
+        print(
+            "[mode: exploratory — not for regulatory submission records; "
+            "see docs/10-21cfr-part11.md §17]",
+            file=sys.stderr,
+        )
+
+
 def _cmd_nca(args: argparse.Namespace) -> int:
     from pkplugin.mcp_server import impl_run_nca
 
@@ -89,22 +105,36 @@ def _cmd_nca(args: argparse.Namespace) -> int:
             print(json.dumps({"status": "error", "error": str(exc)}), file=sys.stderr)
             return 1
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_run_nca(
         dataset_path=args.dataset,
         config=config or None,
         audit_dir=args.out,
+        user=user,
     )
+    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    _print_mode_hint(mode)
     return _print_result(result)
 
 
 def _cmd_be(args: argparse.Namespace) -> int:
     from pkplugin.mcp_server import impl_run_be
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_run_be(
         parameter_dataset_path=args.parameters,
         endpoint=args.endpoint,
         design=args.design,
+        user=user,
     )
+    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    _print_mode_hint(mode)
     return _print_result(result)
 
 
@@ -117,12 +147,19 @@ def _cmd_fit(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "error", "error": str(exc)}), file=sys.stderr)
         return 1
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_fit_pk_model(
         dataset_path=args.dataset,
         model_name=args.model,
         initial_params=init_params,
         dose=args.dose,
+        user=user,
     )
+    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    _print_mode_hint(mode)
     return _print_result(result)
 
 
@@ -135,11 +172,18 @@ def _cmd_pd_fit(args: argparse.Namespace) -> int:
         print(json.dumps({"status": "error", "error": str(exc)}), file=sys.stderr)
         return 1
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_fit_pd_model(
         pd_dataset_path=args.pd_dataset,
         model_name=args.model,
         initial_params=init_params,
+        user=user,
     )
+    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    _print_mode_hint(mode)
     return _print_result(result)
 
 
@@ -183,6 +227,7 @@ def _cmd_doctor(args: argparse.Namespace) -> int:  # noqa: ARG001
         "python_version": sys.version,
         "dependencies": dep_versions,
         "r_backend": r_status,
+        "execution_mode_supported": ["exploratory", "controlled"],
     }
     print(json.dumps(report, indent=2))
     return 0
@@ -255,6 +300,10 @@ def _cmd_sign(args: argparse.Namespace) -> int:
     """Sign a run bundle."""
     from pkplugin.mcp_server import impl_sign_record
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_sign_record(
         run_id=args.run_id,
         signer_identity=args.identity,
@@ -263,6 +312,7 @@ def _cmd_sign(args: argparse.Namespace) -> int:
         private_key_path=args.key,
         passphrase=args.passphrase,
         audit_dir=args.out,
+        user=user,
     )
     return _print_result(result)
 
@@ -275,12 +325,17 @@ def _cmd_lock(args: argparse.Namespace) -> int:
     if args.require_signatures:
         req_sigs = [s.strip() for s in args.require_signatures.split(",")]
 
+    user: dict[str, str] | None = None
+    if getattr(args, "user_id", None):
+        user = {"id": args.user_id, "auth_method": "cli"}
+
     result = impl_lock_run(
         run_id=args.run_id,
         locked_by=args.locked_by or "cli-user",
         lock_reason=args.reason,
         require_signatures=req_sigs,
         audit_dir=args.out,
+        user=user,
     )
     return _print_result(result)
 
@@ -340,6 +395,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Optional NCA config file (JSON or key: value).",
     )
     p_nca.add_argument("--out", metavar="runs/", default=None, help="Audit output directory.")
+    p_nca.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
+    )
 
     # be
     p_be = sub.add_parser("be", help="Run Bioequivalence analysis.")
@@ -347,6 +408,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_be.add_argument("--endpoint", default="AUC0_t", help="PK endpoint (default: AUC0_t).")
     p_be.add_argument(
         "--design", default="crossover_2x2", help="BE design (default: crossover_2x2)."
+    )
+    p_be.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
     )
 
     # fit
@@ -357,6 +424,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_fit.add_argument(
         "--init", required=True, metavar="V=10,k=0.1", help="Initial parameter values."
     )
+    p_fit.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
+    )
 
     # pd-fit
     p_pdfit = sub.add_parser("pd-fit", help="Fit a PD model.")
@@ -366,6 +439,12 @@ def _build_parser() -> argparse.ArgumentParser:
     p_pdfit.add_argument("--model", required=True, help="PD model name (e.g. emax).")
     p_pdfit.add_argument(
         "--init", required=True, metavar="E0=0,Emax=100,EC50=10", help="Initial parameter values."
+    )
+    p_pdfit.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
     )
 
     # report
@@ -442,6 +521,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Re-authentication token (TOTP placeholder).",
     )
     p_sign.add_argument("--out", metavar="runs/", default=None, help="Audit base directory.")
+    p_sign.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
+    )
 
     # lock
     p_lock = sub.add_parser("lock", help="Finalize (lock) a run bundle (§11.10(c)).")
@@ -458,6 +543,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Comma-separated required signature meanings.",
     )
     p_lock.add_argument("--out", metavar="runs/", default=None, help="Audit base directory.")
+    p_lock.add_argument(
+        "--user-id",
+        dest="user_id",
+        default=None,
+        help="User identity for Part 11 controlled mode (also set PKPLUGIN_PART11_ENABLED=1).",
+    )
 
     # verify-chain
     p_vchain = sub.add_parser("verify-chain", help="Verify audit chain integrity (§11.10(e)).")

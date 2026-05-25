@@ -161,6 +161,9 @@ class AuditEntry:
     results: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
     artifacts: list[dict[str, str]] = field(default_factory=list)
+    execution_mode: str = "exploratory"
+    llm_orchestrated: bool = False
+    llm_transcript_hash: str | None = None
     # TODO(v2): e-signature
     # signature: dict[str, Any] | None = None
 
@@ -184,6 +187,9 @@ class AuditEntry:
             "results": self.results,
             "warnings": self.warnings,
             "artifacts": self.artifacts,
+            "execution_mode": self.execution_mode,
+            "llm_orchestrated": self.llm_orchestrated,
+            "llm_transcript_hash": self.llm_transcript_hash,
             # TODO(v2): "signature": self.signature,
         }
 
@@ -237,6 +243,18 @@ class AuditEntry:
 
         lines.append(f"# Audit Log — {self.run_id}")
         lines.append("")
+        # Execution mode badge — shown prominently at top
+        if self.execution_mode == "controlled":
+            lines.append(
+                "> **[CONTROLLED]** — QMS-validated execution path. "
+                "Verify with `pkplugin verify-chain`."
+            )
+        else:
+            lines.append(
+                "> **[EXPLORATORY]** — Not for regulatory submission records. "
+                "See docs/10-21cfr-part11.md §17."
+            )
+        lines.append("")
         lines.append("| Field | Value |")
         lines.append("|---|---|")
         lines.append(f"| **Run ID** | `{self.run_id}` |")
@@ -244,7 +262,11 @@ class AuditEntry:
         lines.append(f"| **Timestamp (UTC)** | {self.timestamp_utc} |")
         lines.append(f"| **pk-copilot version** | {self.pkplugin_version} |")
         lines.append(f"| **WinNonlin compat** | {self.winnonlin_compat} |")
-        lines.append(f"| **User** | {self.user or '(not set — v0.1)'} |")
+        lines.append(f"| **User** | {self.user or '(not set)'} |")
+        lines.append(f"| **Execution Mode** | {self.execution_mode} |")
+        lines.append(f"| **LLM Orchestrated** | {'Yes' if self.llm_orchestrated else 'No'} |")
+        if self.llm_transcript_hash:
+            lines.append(f"| **LLM Transcript Hash** | `{self.llm_transcript_hash}` |")
         lines.append("")
 
         # Input files
@@ -331,6 +353,9 @@ def new_entry(
     input_paths: list[str | Path] | None = None,
     winnonlin_compat: str = "6.4",
     extra_dependency_versions: dict[str, str] | None = None,
+    execution_mode: str = "exploratory",
+    llm_orchestrated: bool = False,
+    llm_transcript_hash: str | None = None,
 ) -> AuditEntry:
     """Convenience factory that populates all boilerplate fields.
 
@@ -341,6 +366,10 @@ def new_entry(
                      skipped with a warning rather than raising.
         winnonlin_compat: WinNonlin compatibility string.
         extra_dependency_versions: Extra ``{pkg: version}`` to merge.
+        execution_mode: ``"exploratory"`` (default) or ``"controlled"``.
+        llm_orchestrated: Whether this call was initiated via LLM/chat.
+        llm_transcript_hash: Optional hash of the LLM transcript for
+                             provenance (v2.1 feature; supply when available).
 
     Returns:
         Populated :class:`AuditEntry` ready for ``write()``.
@@ -371,4 +400,7 @@ def new_entry(
         config=config,
         dependency_versions=dep_versions,
         os_info=collect_os_info(),
+        execution_mode=execution_mode,
+        llm_orchestrated=llm_orchestrated,
+        llm_transcript_hash=llm_transcript_hash,
     )

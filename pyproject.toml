@@ -1,6 +1,6 @@
 [project]
 name = "pk-copilot"
-version = "2.0.0"
+version = "2.0.1"
 description = "Phoenix WinNonlin-compatible PK/PD/NCA/Compartmental analysis for Claude Code"
 authors = [{ name = "pk-copilot contributors", email = "kimmingul@gmail.com" }]
 license = { text = "Apache-2.0" }

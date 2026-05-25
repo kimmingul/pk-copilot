@@ -163,11 +163,31 @@ def _df_to_html(df: object) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _execution_mode_badge_html(execution_mode: str) -> str:
+    """Return an inline-styled HTML badge for the execution mode."""
+    if execution_mode == "controlled":
+        bg = "#d1fae5"
+        text = "[Controlled — QMS-Validated Path]"
+        border = "#34d399"
+        color = "#065f46"
+    else:
+        bg = "#fef3c7"
+        text = "[Exploratory — LLM Orchestrated]"
+        border = "#fbbf24"
+        color = "#92400e"
+    return (
+        f'<div style="background:{bg};border:1px solid {border};color:{color};'
+        f'padding:8px 12px;border-radius:4px;font-weight:bold;margin-bottom:1em;">'
+        f"{text}</div>"
+    )
+
+
 def render_html_report(
     title: str,
     metadata: dict[str, str],
     sections: list[dict[str, object]],
     output_path: str | Path,
+    execution_mode: str = "exploratory",
 ) -> Path:
     """Render a self-contained HTML report. Embeds plots as base64 <img>.
 
@@ -207,6 +227,8 @@ def render_html_report(
         f"</div>"
     )
 
+    badge_html = _execution_mode_badge_html(execution_mode)
+
     html = (
         "<!DOCTYPE html>\n"
         '<html lang="en">\n'
@@ -217,6 +239,7 @@ def render_html_report(
         "</head>\n"
         "<body>\n"
         f"<h1>{_escape_html(title)}</h1>\n"
+        f"{badge_html}\n"
         f"{meta_html}\n"
         f"{sections_html}\n"
         f"{disclaimer}\n"
@@ -240,6 +263,7 @@ def render_nca_report(
     *,
     include_plots: bool = True,
     audit_dir: str | Path | None = None,
+    execution_mode: str = "exploratory",
 ) -> Path:
     """Full NCA HTML report with parameter table + concentration plots + λz regression plots."""
 
@@ -344,6 +368,7 @@ def render_nca_report(
         metadata=metadata,
         sections=sections,
         output_path=out,
+        execution_mode=execution_mode,
     )
 
 
@@ -357,6 +382,7 @@ def render_be_report(
     output_path: str | Path,
     *,
     audit_dir: str | Path | None = None,
+    execution_mode: str = "exploratory",
 ) -> Path:
     """BE HTML report: GMR + 90% CI + ANOVA table + verdict box."""
     from pkplugin.report.tables import build_be_summary_table
@@ -448,4 +474,5 @@ def render_be_report(
         metadata=metadata,
         sections=sections,
         output_path=out,
+        execution_mode=execution_mode,
     )

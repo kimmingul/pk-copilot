@@ -264,7 +264,79 @@ rxode2         (>= 2.0)
 
 ---
 
+---
+
+## 🔀 Execution Mode Boundary
+
+### 두 계층 아키텍처
+
+pk-copilot은 LLM 오케스트레이션 계층과 deterministic kernel을 명확히 분리합니다.
+이 분리가 "Part 11-enabling" 주장의 핵심 근거입니다.
+
+```
+사용자 (자연어 입력)
+        │
+        ▼
+┌────────────────────────────────────────────────────────┐
+│  LLM 오케스트레이션 계층  [EXPLORATORY]                  │
+│                                                        │
+│  - 자연어 의도 해석                                      │
+│  - 데이터 컬럼 매핑 제안                                  │
+│  - 모델 추천, 파라미터 범위 제안                           │
+│  - 보고서 내러티브 초안                                   │
+│                                                        │
+│  ⚠ 숫자 계산 수행 금지  ⚠ GxP audit chain 미생성         │
+│  Audit: LLM transcript log (non-GxP, exploratory)      │
+└───────────────────────┬────────────────────────────────┘
+                        │
+                        │  사용자 승인 (명시적)
+                        │  ← controlled mode: 이 승인이 audit chain에 기록됨
+                        ▼
+┌────────────────────────────────────────────────────────┐
+│  Deterministic Kernel  [CONTROLLED CANDIDATE]          │
+│                                                        │
+│  - numpy / scipy / PKNCA-compatible 계산               │
+│  - 동일 입력 해시 → 동일 수치 결과 보장                   │
+│  - JSON-of-record + 실행 스크립트 자동 생성               │
+│                                                        │
+│  Audit: HMAC hash-chained execution record             │
+│         (GxP candidate — customer QMS 하에서 사용 가능) │
+└───────────────────────┬────────────────────────────────┘
+                        │
+                        ▼
+┌────────────────────────────────────────────────────────┐
+│  Audit Chain (controlled mode only)                    │
+│                                                        │
+│  - Append-only JSONL                                   │
+│  - HMAC-SHA256 per entry                               │
+│  - SHA-256 hash chain (prev_hash → this_hash)          │
+│  - Ed25519 e-signature (sign_record)                   │
+│  - WORM lock (lock_run → LOCKED.json + 0o444)          │
+└────────────────────────────────────────────────────────┘
+                        │
+                        ▼
+                  Signed Bundle
+          (규제 제출 후보 — customer QMS 검증 필요)
+```
+
+### 각 계층의 Audit Emission 정책
+
+| 계층 | Audit 유형 | GxP 적용 가능 | 비고 |
+|---|---|---|---|
+| LLM 오케스트레이션 | LLM transcript log | No (non-GxP) | 탐색적 출처 증명용 |
+| Deterministic kernel | HMAC hash-chain execution record | Yes (candidate) | customer QMS 하에서 사용 가능 |
+| E-signature | Ed25519 signature manifest | Yes (candidate) | §11.50 3필드 강제 |
+| WORM lock | LOCKED.json + OS-level 0o444 | Yes (candidate) | lock_run 후 불변 |
+
+### 두 계층 연결 (v2.1 계획)
+
+controlled mode에서 LLM transcript hash를 deterministic record에 reference로 포함하는
+기능은 v2.1로 연기되었습니다. v2.0에서는 두 계층이 독립적으로 기록됩니다.
+
+---
+
 ## 🔗 다음 단계
 
 - [02-roadmap.md](02-roadmap.md) — 단계별 빌드 계획
 - [06-mcp-server.md](06-mcp-server.md) — MCP 도구 상세 사양
+- [14-llm-boundary-disclosure.md](14-llm-boundary-disclosure.md) — LLM 경계 공개 (상세)

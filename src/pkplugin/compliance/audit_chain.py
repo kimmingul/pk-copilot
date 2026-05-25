@@ -223,6 +223,12 @@ class AuditChainEntry:
     payload_sha256: str
     """sha256 of canonical JSON of (action, run_id, before, after)."""
 
+    execution_mode: str
+    """'exploratory' or 'controlled' — included in hash-protected body."""
+
+    llm_orchestrated: bool
+    """Whether this call was initiated via LLM/chat orchestration."""
+
     this_hash: str
     """sha256 of the canonical JSON of all fields except this_hash and hmac."""
 
@@ -271,6 +277,8 @@ class AuditChain:
         before: dict[str, Any] | None = None,
         after: dict[str, Any] | None = None,
         ntp_source: str = "system_clock",
+        execution_mode: str = "exploratory",
+        llm_orchestrated: bool = False,
     ) -> AuditChainEntry:
         """Append one entry to the chain and return it."""
         if not reason.strip():
@@ -302,6 +310,8 @@ class AuditChain:
             "before": before,
             "after": after,
             "payload_sha256": payload_sha256,
+            "execution_mode": execution_mode,
+            "llm_orchestrated": llm_orchestrated,
         }
         body_json = _canonical_body(entry_body)
         this_hash = _compute_this_hash_from_body(body_json)
@@ -320,6 +330,8 @@ class AuditChain:
             before=before,
             after=after,
             payload_sha256=payload_sha256,
+            execution_mode=execution_mode,
+            llm_orchestrated=llm_orchestrated,
             this_hash=this_hash,
             hmac=hmac_hex,
         )
@@ -452,6 +464,8 @@ def _entry_from_dict(data: dict[str, Any]) -> AuditChainEntry:
         before=data.get("before"),
         after=data.get("after"),
         payload_sha256=data["payload_sha256"],
+        execution_mode=data.get("execution_mode", "exploratory"),
+        llm_orchestrated=data.get("llm_orchestrated", False),
         this_hash=data["this_hash"],
         hmac=data["hmac"],
     )

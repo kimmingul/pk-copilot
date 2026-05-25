@@ -20,6 +20,7 @@ def render_pdf_report(
     sections: list[dict[str, Any]],
     output_path: str | Path,
     metadata: dict[str, str],
+    execution_mode: str = "exploratory",
 ) -> Path:
     """PDF report via reportlab. Same content structure as HTML.
 
@@ -109,12 +110,37 @@ def render_pdf_report(
         text = re.sub(r"\s+", " ", text).strip()
         return text
 
+    # Execution mode badge style
+    if execution_mode == "controlled":
+        badge_bg = colors.HexColor("#d1fae5")
+        badge_text = "[Controlled — QMS-Validated Path]"
+        badge_text_color = colors.HexColor("#065f46")
+    else:
+        badge_bg = colors.HexColor("#fef3c7")
+        badge_text = "[Exploratory — LLM Orchestrated]"
+        badge_text_color = colors.HexColor("#92400e")
+
+    style_badge = ParagraphStyle(
+        "ExecutionModeBadge",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=badge_text_color,
+        backColor=badge_bg,
+        borderPadding=6,
+        spaceAfter=8,
+        fontName="Helvetica-Bold",
+    )
+
     story: list[Any] = []
 
     # Title
     story.append(Paragraph(title, style_title))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#003366")))
     story.append(Spacer(1, 0.3 * cm))
+
+    # Execution mode badge
+    story.append(Paragraph(badge_text, style_badge))
+    story.append(Spacer(1, 0.2 * cm))
 
     # Metadata table
     if metadata:
