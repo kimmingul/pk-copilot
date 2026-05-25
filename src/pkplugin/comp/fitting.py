@@ -25,7 +25,7 @@ try:
 except ImportError as _exc:
     raise ImportError("lmfit is required for compartmental fitting") from _exc
 
-from pkplugin.comp.ode import DosingEvent, simulate_ode
+from pkplugin.comp.ode import DosingEvent, MODEL_REQUIRED_PARAMS, simulate_ode
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -120,7 +120,9 @@ _ITERATIVE_WEIGHTS: frozenset[WeightScheme] = frozenset(
     ["1_over_pred", "1_over_pred_squared"]
 )
 
-_N_ITER_PRED_WEIGHTS = 3  # number of re-fitting passes for pred-based weights
+# M1: iterative pred-weight convergence settings
+_MAX_ITER_PRED_WEIGHTS = 5           # maximum re-fitting passes
+_PRED_WEIGHT_CONV_TOL = 1e-4         # L-inf parameter change threshold
 
 
 def _compute_weights(
@@ -236,6 +238,8 @@ def fit_pk_model(
     dose: float | None = None,
     dosing_events: list[DosingEvent] | None = None,
     *,
+    dose_route: Literal["iv_bolus", "iv_infusion", "oral"] | None = None,
+    infusion_duration: float | None = None,
     weighting: WeightScheme = "1_over_y_squared",
     residual_error: ResidualErrorModel = "proportional",
     use_ode: bool = False,
@@ -252,9 +256,16 @@ def fit_pk_model(
         initial_params: Either a ``dict[name, initial_value]`` or a list of
             :class:`ParamSpec` objects with bounds.
         dose: Single-dose amount (mg).  Ignored when ``dosing_events`` is
-            provided.  Constructs a single IV-bolus event at t=0 if set.
+            provided.  Constructs a single dose event at t=0 using
+            ``dose_route``.
         dosing_events: Explicit list of :class:`DosingEvent`.  Takes
             precedence over ``dose``.
+        dose_route: Route for the inline ``dose`` shorthand.  One of
+            ``"iv_bolus"`` (default), ``"iv_infusion"``, or ``"oral"``.
+            Ignored when ``dosing_events`` is provided.
+        infusion_duration: Infusion duration (hr) required when
+            ``dose_route == "iv_infusion"``.  Raises :exc:`ValueError` if
+            not provided in that case.
         weighting: Weighting scheme for residuals.
         residual_error: Residual error model (currently informational; the
             weighting already encodes the variance structure).
@@ -280,29 +291,55 @@ def fit_pk_model(
     if dosing_events is not None:
         ev_list: list[DosingEvent] = list(dosing_events)
     elif dose is not None:
-        # Infer route from model name
-        if "po" in model_name:
-            route: Literal["iv_bolus", "iv_infusion", "oral"] = "oral"
+        # H4: resolve effective route — caller may supply dose_route explicitly,
+        # otherwise fall back to model-name inference for backward compatibility.
+        if dose_route is None:
+            effective_route: Literal["iv_bolus", "iv_infusion", "oral"] = (
+                "oral" if "po" in model_name else "iv_bolus"
+            )
         else:
-            route = "iv_bolus"
-        ev_list = [DosingEvent(time=0.0, amount=dose, route=route)]
+            effective_route = dose_route
+        if effective_route == "iv_infusion":
+            if infusion_duration is None or infusion_duration <= 0.0:
+                raise ValueError(
+                    "infusion_duration > 0 is required when dose_route='iv_infusion'"
+                )
+        ev_list = [
+            DosingEvent(
+                time=0.0,
+                amount=dose,
+                route=effective_route,
+                infusion_duration=infusion_duration,
+            )
+        ]
     else:
         raise ValueError(
             "Either dose or dosing_events must be provided."
         )
 
     specs = _normalise_specs(initial_params)
+
+    # H5: Validate that initial_params covers all required parameters
+    required_params = MODEL_REQUIRED_PARAMS.get(model_name, frozenset())
+    provided_names = {sp.name for sp in specs}
+    missing_params = required_params - provided_names
+    if missing_params:
+        raise ValueError(
+            f"initial_params is missing required parameters for {model_name!r}: "
+            f"{sorted(missing_params)}"
+        )
+
     fit_warnings: list[str] = []
 
-    # For pred-based weights we run multiple passes
+    # For pred-based weights we run multiple convergence passes (M1)
     is_iterative = weighting in _ITERATIVE_WEIGHTS
-    n_passes = _N_ITER_PRED_WEIGHTS if is_iterative else 1
 
     # Initial uniform-weight fit for iterative weight initialisation
     current_weights = np.ones(len(obs_arr), dtype=np.float64)
     lmfit_result: "lmfit.MinimizerResult | None" = None
+    prev_pdict: dict[str, float] | None = None
 
-    for _pass in range(n_passes):
+    for _pass in range(_MAX_ITER_PRED_WEIGHTS if is_iterative else 1):
         lm_params = _build_lmfit_params(specs)
         w_snapshot = current_weights.copy()
 
@@ -329,21 +366,38 @@ def fit_pk_model(
                 nan_policy="propagate",
             )
 
-        if _pass < n_passes - 1:
-            # Update pred-based weights for next pass
-            best_pdict = {k: float(v) for k, v in lmfit_result.params.valuesdict().items()}
+        best_pdict = {k: float(v) for k, v in lmfit_result.params.valuesdict().items()}
+
+        if is_iterative:
+            # M1: check convergence before deciding whether to continue
+            if prev_pdict is not None:
+                max_change = max(
+                    abs(best_pdict[k] - prev_pdict[k])
+                    for k in best_pdict
+                )
+                if max_change < _PRED_WEIGHT_CONV_TOL:
+                    fit_warnings.append(
+                        f"Pred-based weighting converged at pass {_pass + 1} "
+                        f"(L∞ param change={max_change:.2e} < {_PRED_WEIGHT_CONV_TOL:.0e})."
+                    )
+                    break
+            prev_pdict = best_pdict
+            # Seed next pass from current estimates (M1: chain, not restart)
+            specs = [
+                ParamSpec(
+                    name=sp.name,
+                    initial=best_pdict[sp.name],
+                    lower=sp.lower,
+                    upper=sp.upper,
+                    vary=sp.vary,
+                )
+                for sp in specs
+            ]
+            # Update pred-based weights using current best estimates
             y_pred_new = _predict(
                 model_name, best_pdict, times_arr, ev_list, use_ode, rtol, atol
             )
             current_weights = _compute_weights(weighting, obs_arr, y_pred_new)
-        else:
-            # Final pass: compute weights for diagnostics
-            best_pdict = {k: float(v) for k, v in lmfit_result.params.valuesdict().items()}
-            y_pred_final = _predict(
-                model_name, best_pdict, times_arr, ev_list, use_ode, rtol, atol
-            )
-            if not is_iterative:
-                current_weights = _compute_weights(weighting, obs_arr, y_pred_final)
 
     assert lmfit_result is not None
 
@@ -354,6 +408,9 @@ def fit_pk_model(
     y_pred_final = _predict(
         model_name, best_pdict, times_arr, ev_list, use_ode, rtol, atol
     )
+    # For non-iterative schemes, compute final weights now (first time)
+    if not is_iterative:
+        current_weights = _compute_weights(weighting, obs_arr, y_pred_final)
     final_weights = current_weights
 
     raw_residuals = y_pred_final - obs_arr
@@ -418,8 +475,18 @@ def fit_pk_model(
         if not sp.vary:
             continue
         est = best_pdict[sp.name]
-        at_lower = sp.lower > -np.inf and abs(est - sp.lower) < 1e-6 * (abs(sp.lower) + 1e-10)
-        at_upper = sp.upper < np.inf and abs(est - sp.upper) < 1e-6 * (abs(sp.upper) + 1e-10)
+        # L1: use np.isclose with rtol=1e-3, atol=1e-6 for finite bounds;
+        # for the common case of lower=0 use a relative-scale check.
+        at_lower = False
+        if sp.lower > -np.inf:
+            if sp.lower == 0.0:
+                # relative-scale check: estimate is within 0.1% of zero bound
+                at_lower = est / (est + 1.0) < 0.001 if est >= 0 else False
+            else:
+                at_lower = bool(np.isclose(est, sp.lower, rtol=1e-3, atol=1e-6))
+        at_upper = sp.upper < np.inf and bool(
+            np.isclose(est, sp.upper, rtol=1e-3, atol=1e-6)
+        )
         if at_lower or at_upper:
             fit_warnings.append(
                 f"Parameter {sp.name!r} is at its bound (estimate={est:.4g})."

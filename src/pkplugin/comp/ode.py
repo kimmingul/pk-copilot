@@ -17,6 +17,20 @@ Michaelis-Menten variants (not in REGISTRY, ODE-only):
   cmt2_iv_mm  — 2-cmt IV + MM elimination from central
   cmt1_po_mm  — 1-cmt oral + MM elimination
 
+Observation-time convention
+---------------------------
+When an observation time coincides with a bolus or oral dose event, the
+**post-dose** state is recorded (i.e. the bolus amount has been added before
+evaluating the concentration). This matches the WinNonlin default convention.
+
+Michaelis-Menten units
+----------------------
+Vmax is in **concentration/time** units (e.g. ng/mL/hr) and Km in
+**concentration** units (e.g. ng/mL).  Internally:
+    elim_rate_amount = Vmax * C / (Km + C) * V_central
+where C = A_central / V_central.  This keeps the ODE in amount space while
+Vmax and Km are pure concentration-based parameters.
+
 Refs: docs/03-algorithms/08-compartmental-models.md §3
 """
 
@@ -201,9 +215,17 @@ def _make_rhs_cmt1_iv_mm(
     """1-cmt IV + Michaelis-Menten elimination.
 
     State: [A_c]
-    dA_c/dt = R_in - Vmax*(A_c/V) / (Km + A_c/V)
+    dA_c/dt = R_in - Vmax * C / (Km + C) * V
 
-    Note: Vmax is in mg/hr (amount units), Km in mg/L (conc units).
+    where C = A_c / V (concentration, ng/mL or equivalent).
+    Vmax is in concentration/time units (e.g. ng/mL/hr).
+    Km is in concentration units (e.g. ng/mL).
+    The factor V converts the concentration-based elimination rate back to
+    amount/time so the ODE remains in amount space.
+
+    Sanity check (Vmax=100 ng/mL/hr, Km=5 ng/mL, V=10 L, dose=1000 mg):
+      At C >> Km: apparent elimination ≈ Vmax * V = 1000 ng/hr per mL * 10 L
+      At C << Km: apparent k_eff = Vmax/Km = 20 hr⁻¹ → fast linear decay.
     """
     V = params["V"]
     vmax = params["Vmax"]
@@ -216,7 +238,7 @@ def _make_rhs_cmt1_iv_mm(
         for t0, t1, rate in infusion_windows:
             if t0 <= t < t1:
                 r_in += rate
-        elim = vmax * c / (km + c) * V  # convert back to amount/hr
+        elim = vmax * c / (km + c) * V  # amount/hr
         return np.array([r_in - elim])
 
     return rhs
@@ -229,6 +251,10 @@ def _make_rhs_cmt2_iv_mm(
     """2-cmt IV + MM elimination from central.
 
     State: [A1, A2]
+    dA1/dt = R_in - Vmax * C1 / (Km + C1) * V1 - k12*A1 + k21*A2
+    dA2/dt = k12*A1 - k21*A2
+
+    Vmax in concentration/time, Km in concentration units.
     """
     V1 = params["V1"]
     vmax = params["Vmax"]
@@ -258,8 +284,12 @@ def _make_rhs_cmt1_po_mm(
     """1-cmt oral + MM elimination.
 
     State: [A_depot, A_c]
+    dA_depot/dt = -ka * A_depot
+    dA_c/dt    =  ka * A_depot - Vmax * C / (Km + C) * V_F
+
+    Vmax in concentration/time, Km in concentration units.
     """
-    V_F = params.get("V_F", params.get("V", 1.0))
+    V_F = params["V_F"]
     ka = params["ka"]
     vmax = params["Vmax"]
     km = params["Km"]
@@ -308,6 +338,27 @@ _MODEL_META: dict[
 
 
 # ---------------------------------------------------------------------------
+# Required parameters per model (H3 — no silent fallbacks)
+# ---------------------------------------------------------------------------
+
+#: Mapping from model code to the set of parameter keys that *must* be present
+#: in the ``params`` dict passed to :func:`simulate_ode`.  Raises
+#: :exc:`ValueError` when any required key is missing.
+MODEL_REQUIRED_PARAMS: dict[str, frozenset[str]] = {
+    "cmt1_iv_bolus":    frozenset({"V", "k"}),
+    "cmt1_iv_infusion": frozenset({"V", "k"}),
+    "cmt1_po":          frozenset({"V_F", "ka", "k"}),
+    "cmt2_iv_bolus":    frozenset({"V1", "k10", "k12", "k21"}),
+    "cmt2_iv_infusion": frozenset({"V1", "k10", "k12", "k21"}),
+    "cmt2_po":          frozenset({"V1_F", "ka", "k10", "k12", "k21"}),
+    "cmt3_iv_bolus":    frozenset({"V1", "k10", "k12", "k21", "k13", "k31"}),
+    "cmt1_iv_mm":       frozenset({"V", "Vmax", "Km"}),
+    "cmt2_iv_mm":       frozenset({"V1", "Vmax", "Km", "k12", "k21"}),
+    "cmt1_po_mm":       frozenset({"V_F", "ka", "Vmax", "Km"}),
+}
+
+
+# ---------------------------------------------------------------------------
 # Core simulator
 # ---------------------------------------------------------------------------
 
@@ -349,10 +400,18 @@ def simulate_ode(
             f"Supported: {sorted(_MODEL_META)}"
         )
 
+    # H3: Validate required parameters — no silent fallbacks
+    required = MODEL_REQUIRED_PARAMS.get(model_name, frozenset())
+    missing = required - set(params)
+    if missing:
+        raise ValueError(
+            f"Missing required parameters for {model_name!r}: {sorted(missing)}"
+        )
+
     n_states, central_idx, depot_idx, vol_param, rhs_factory = _MODEL_META[model_name]
 
-    # Volume used for concentration conversion
-    vol = params.get(vol_param, params.get("V", 1.0))
+    # Volume used for concentration conversion (guaranteed present by validation above)
+    vol = params[vol_param]
 
     obs_times = np.asarray(times, dtype=np.float64)
 
@@ -386,8 +445,12 @@ def simulate_ode(
     # Initial state
     state = np.zeros(n_states, dtype=np.float64)
 
-    # Accumulate concentration at observation times
-    conc_out = np.zeros(len(obs_times), dtype=np.float64)
+    # C1: use a boolean array to track which observation indices have been
+    # written.  Avoids using 0.0 as a sentinel (legitimate zero concentrations
+    # would be overwritten silently under the old scheme).
+    n_obs = len(obs_times)
+    recorded: NDArray[np.bool_] = np.zeros(n_obs, dtype=bool)
+    conc_out = np.zeros(n_obs, dtype=np.float64)
 
     # Map from observation time → indices (multiple obs can share a time)
     obs_idx: dict[float, list[int]] = {}
@@ -406,18 +469,19 @@ def simulate_ode(
                             f"Model {model_name!r} has no depot compartment "
                             "but received an oral dose."
                         )
-                    # Apply Tlag by scheduling as a separate bolus to depot
                     new_state[depot_idx] += ev.amount
                 # iv_infusion: handled via infusion_windows in RHS, no bolus injection
         return new_state
 
     def _record_obs(t: float, y: NDArray[np.float64]) -> None:
+        """Record concentration from state y at time t (marks recorded[i]=True)."""
         if t in obs_idx:
             conc = y[central_idx] / vol
             for i in obs_idx[t]:
                 conc_out[i] = conc
+                recorded[i] = True
 
-    # Handle t=0 dose applications before any integration
+    # H1: post-dose convention — apply t=0 events BEFORE recording t=0 obs
     state = _apply_event_at(0.0, state)
     _record_obs(0.0, state)
 
@@ -429,12 +493,16 @@ def simulate_ode(
         if t_end <= t_start + 1e-14:
             continue
 
-        # Apply any dosing events at the START of this segment (t > 0 events)
+        # H1: Apply dosing events at the START of each segment (t > 0), then
+        # overwrite any observation at t_start with the post-dose value.
         # (t=0 already handled above)
         if seg_idx > 0 or t_start > 0.0:
             state = _apply_event_at(t_start, state)
+            # Post-dose convention: overwrite observation at t_start if a dose
+            # was just applied here.
+            _record_obs(t_start, state)
 
-        # Observation times within this segment
+        # Observation times strictly inside this segment (t_start < t <= t_end)
         seg_obs = sorted(
             t for t in obs_idx if t_start < t <= t_end + 1e-14
         )
@@ -464,20 +532,24 @@ def simulate_ode(
                 f"ODE solver failed in segment [{t_start}, {t_end}]: {sol.message}"
             )
 
-        # Record observations from this segment
+        # Record observations from this segment (only those not yet written
+        # at t_start by the post-dose step above)
         for j, tj in enumerate(sol.t):
             tj_f = float(tj)
             if tj_f in obs_idx:
                 conc = sol.y[central_idx, j] / vol
                 for i in obs_idx[tj_f]:
-                    conc_out[i] = conc
+                    if not recorded[i]:
+                        conc_out[i] = conc
+                        recorded[i] = True
 
         # State at end of segment
         state = sol.y[:, -1].copy()
 
-    # Handle obs exactly at t=0 if not already set (post dose)
-    for i, t in enumerate(obs_times):
-        if abs(t) < 1e-14 and conc_out[i] == 0.0:
+    # C1: Fall back for any observation not yet recorded (e.g. obs at t=0 for
+    # a model with no t=0 dose, or numeric edge cases).
+    for i in range(n_obs):
+        if not recorded[i]:
             conc_out[i] = state[central_idx] / vol
 
     return conc_out

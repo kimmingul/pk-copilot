@@ -716,6 +716,56 @@ def impl_list_pk_models() -> dict[str, Any]:
     }
 
 
+def _ode_only_models() -> frozenset[str]:
+    """Return the set of ODE-only MM model names supported by comp.ode."""
+    from pkplugin.comp.ode import MODEL_REQUIRED_PARAMS
+    from pkplugin.comp.models import REGISTRY
+    return frozenset(MODEL_REQUIRED_PARAMS) - frozenset(REGISTRY)
+
+
+def _all_supported_models() -> frozenset[str]:
+    """Combined set: REGISTRY linear models + ODE-only MM models (H6)."""
+    from pkplugin.comp.models import REGISTRY
+    return frozenset(REGISTRY) | _ode_only_models()
+
+
+def _parse_dose_csv(
+    dose_path: "Path",
+    subject_id: "str | None" = None,
+) -> "list[Any]":
+    """Parse a dose CSV and return a list of DosingEvent objects.
+
+    M3: Filters rows by subject_id when provided so that each subject's
+    dosing uses only their own rows.
+
+    Expected columns: time, amount, route (optional), infusion_duration (optional).
+    """
+    from pkplugin.comp.ode import DosingEvent
+
+    dose_df = pd.read_csv(dose_path)
+    # H7 / M3: filter by subject when the column is present
+    if subject_id is not None and "subject_id" in dose_df.columns:
+        dose_df = dose_df[dose_df["subject_id"].astype(str) == str(subject_id)]
+
+    ev_list: list[DosingEvent] = []
+    for _, row in dose_df.iterrows():
+        route_str = str(row.get("route", "iv_bolus")).lower().replace(" ", "_")
+        if route_str not in ("iv_bolus", "iv_infusion", "oral"):
+            route_str = "iv_bolus"
+        infusion_dur: float | None = None
+        if route_str == "iv_infusion" and "infusion_duration" in dose_df.columns:
+            infusion_dur = float(row["infusion_duration"])
+        ev_list.append(
+            DosingEvent(
+                time=float(row.get("time", 0.0)),
+                amount=float(row["amount"]),
+                route=route_str,  # type: ignore[arg-type]
+                infusion_duration=infusion_dur,
+            )
+        )
+    return ev_list
+
+
 def impl_simulate_pk_model(
     model_name: str,
     params: dict[str, float],
@@ -728,33 +778,55 @@ def impl_simulate_pk_model(
     """Forward simulation returning predicted concentrations.
 
     Uses the closed-form analytic solution for linear models when available
-    (or ODE if the model requires it).
+    (or ODE if the model requires it).  Also accepts ODE-only MM models
+    (cmt1_iv_mm, cmt2_iv_mm, cmt1_po_mm).
 
     Refs: docs/03-algorithms/08-compartmental-models.md §2–§3
     """
     from pkplugin.comp.models import REGISTRY
 
-    if model_name not in REGISTRY:
+    # H6: validate against combined set (REGISTRY + ODE-only MM models)
+    all_supported = _all_supported_models()
+    if model_name not in all_supported:
         return {
             "status": "error",
             "error": (
                 f"Unknown model: {model_name!r}. "
-                f"Available: {sorted(REGISTRY)}"
+                f"Available: {sorted(all_supported)}"
             ),
         }
 
     try:
-        from pkplugin.comp.analytic import predict
+        # For ODE-only MM models, route through simulate_ode directly
+        if model_name not in REGISTRY:
+            from pkplugin.comp.ode import DosingEvent, simulate_ode, simulate_ode_with_tlag
+            import numpy as np
 
-        conc = predict(
-            model=model_name,
-            params=params,
-            times=times,
-            dose=dose,
-            infusion_duration=infusion_duration,
-            tlag=tlag,
-            F=F,
-        )
+            # Infer route from model name
+            if "po" in model_name:
+                route_str: Any = "oral"
+            else:
+                route_str = "iv_bolus"
+            dosing_ev = [DosingEvent(time=0.0, amount=dose, route=route_str,
+                                     infusion_duration=infusion_duration)]
+            if tlag > 0.0:
+                conc = simulate_ode_with_tlag(
+                    model_name, params, dosing_ev, times, tlag=tlag
+                )
+            else:
+                conc = simulate_ode(model_name, params, dosing_ev, times)
+        else:
+            from pkplugin.comp.analytic import predict
+
+            conc = predict(
+                model=model_name,
+                params=params,
+                times=times,
+                dose=dose,
+                infusion_duration=infusion_duration,
+                tlag=tlag,
+                F=F,
+            )
         return {
             "status": "ok",
             "model_name": model_name,
@@ -803,12 +875,14 @@ def impl_fit_pk_model(
     from pkplugin.comp.ode import DosingEvent
 
     # --- Validate model name first so we can return a clean error ---
-    if model_name not in REGISTRY:
+    # H6: accept REGISTRY linear models + ODE-only MM models
+    all_supported = _all_supported_models()
+    if model_name not in all_supported:
         return {
             "status": "error",
             "error": (
                 f"Unknown model: {model_name!r}. "
-                f"Available: {sorted(REGISTRY)}"
+                f"Available: {sorted(all_supported)}"
             ),
         }
 
@@ -856,26 +930,11 @@ def impl_fit_pk_model(
                 "error": f"Dose file not found: {dose_path_resolved}",
             }
         try:
-            dose_df = pd.read_csv(dose_path_resolved)
+            # H7/M3: use helper that filters by subject_id when present
+            subject_id_val = str(subject_ids[0]) if "subject_id" in df.columns else None
+            ev_list = _parse_dose_csv(dose_path_resolved, subject_id=subject_id_val)
         except Exception as exc:
             return {"status": "error", "error": f"Failed to read dose CSV: {exc}"}
-
-        ev_list = []
-        for _, row in dose_df.iterrows():
-            route_str = str(row.get("route", "iv_bolus")).lower().replace(" ", "_")
-            if route_str not in ("iv_bolus", "iv_infusion", "oral"):
-                route_str = "iv_bolus"
-            infusion_dur: float | None = None
-            if route_str == "iv_infusion" and "infusion_duration" in dose_df.columns:
-                infusion_dur = float(row["infusion_duration"])
-            ev_list.append(
-                DosingEvent(
-                    time=float(row.get("time", 0.0)),
-                    amount=float(row["amount"]),
-                    route=route_str,  # type: ignore[arg-type]
-                    infusion_duration=infusion_dur,
-                )
-            )
     elif dose is None and "dose" in sub_df.columns:
         dose_vals = sub_df["dose"].dropna()
         if not dose_vals.empty:
@@ -924,7 +983,8 @@ def impl_fit_pk_model(
         return {"status": "error", "error": str(exc)}
 
     # --- Build parameter summary ---
-    spec = REGISTRY[model_name]
+    # H6: MM-only models are not in REGISTRY; use None for winnonlin_model_id
+    spec = REGISTRY.get(model_name)
     parameters: dict[str, dict[str, Any]] = {}
     for pname, est in fit.parameters.items():
         se = fit.standard_errors.get(pname)
@@ -962,7 +1022,7 @@ def impl_fit_pk_model(
             "residual_error": residual_error,
             "use_ode": use_ode,
             "winnonlin_version": winnonlin_version,
-            "winnonlin_model_id": spec.winnonlin_model_id,
+            "winnonlin_model_id": spec.winnonlin_model_id if spec is not None else None,
         },
         input_paths=input_paths,
         winnonlin_compat=winnonlin_version,
@@ -996,9 +1056,10 @@ def impl_fit_pk_model(
         _render_fit_script(ds_path, dose_path_resolved, model_name, initial_params, dose, weighting, residual_error, use_ode, winnonlin_version)
     )
 
+    _wn_model_id = spec.winnonlin_model_id if spec is not None else None
     entry.results = {
         "model_name": model_name,
-        "winnonlin_model_id": spec.winnonlin_model_id,
+        "winnonlin_model_id": _wn_model_id,
         "parameters": parameters,
         "diagnostics": diagnostics,
         "n_subjects_fitted": 1,
@@ -1025,7 +1086,7 @@ def impl_fit_pk_model(
         "fit_csv_path": str(fit_csv_path),
         "script_path": str(script_path),
         "model_name": model_name,
-        "winnonlin_model_id": spec.winnonlin_model_id,
+        "winnonlin_model_id": _wn_model_id,
         "parameters": parameters,
         "diagnostics": diagnostics,
         "warnings": fit.warnings,
@@ -1051,15 +1112,14 @@ def _render_fit_script(
     )
     dose_load_block = ""
     if dose_path is not None:
+        # M3: generated script uses _parse_dose_csv helper for subject filtering
+        # and infusion_duration support — matches impl_fit_pk_model behaviour.
         dose_load_block = (
-            f"import pandas as _dose_df_mod\n"
-            f"_dose_df = _dose_df_mod.read_csv(Path({str(dose_path)!r}))\n"
-            f"from pkplugin.comp.ode import DosingEvent\n"
-            f"dosing_events = [\n"
-            f"    DosingEvent(time=float(r['time']), amount=float(r['amount']),\n"
-            f"                route=str(r.get('route', 'iv_bolus')))\n"
-            f"    for _, r in _dose_df.iterrows()\n"
-            f"]\n"
+            f"from pkplugin.mcp_server import _parse_dose_csv\n"
+            f"dosing_events = _parse_dose_csv(\n"
+            f"    Path({str(dose_path)!r}),\n"
+            f"    subject_id=str(df['subject_id'].iloc[0]) if 'subject_id' in df.columns else None,\n"
+            f")\n"
         )
     return (
         f"# Auto-generated reproducible PK fit script\n"
@@ -1088,6 +1148,238 @@ def _render_fit_script(
         f"print('BIC:', result.diagnostics.bic)\n"
         f"print('Converged:', result.diagnostics.converged)\n"
     )
+
+
+def impl_list_pd_models() -> dict[str, Any]:
+    """Return all available PD model names and their parameter lists.
+
+    Refs: docs/03-algorithms/09-pkpd-models.md §1
+    """
+    from pkplugin.pd.models import PD_REGISTRY
+
+    models: list[dict[str, Any]] = []
+    for name, spec in PD_REGISTRY.items():
+        models.append(
+            {
+                "name": spec.name,
+                "model_type": spec.model_type.value,
+                "parameter_names": list(spec.parameter_names),
+                "requires_ode": spec.requires_ode,
+                "is_inhibitory": spec.is_inhibitory,
+            }
+        )
+    return {
+        "status": "ok",
+        "models": models,
+        "n_models": len(models),
+    }
+
+
+def impl_simulate_pd_model(
+    model_name: str,
+    params: dict[str, float],
+    times: list[float],
+    concentrations: list[float],
+) -> dict[str, Any]:
+    """Forward simulation returning predicted effects.
+
+    Args:
+        model_name: Canonical PD model code.
+        params: Parameter dict.
+        times: Observation times.
+        concentrations: Plasma concentrations at *times*.
+
+    Returns:
+        dict with status, model_name, times, effects.
+
+    Refs: docs/03-algorithms/09-pkpd-models.md §1
+    """
+    from pkplugin.pd.models import PD_REGISTRY
+
+    if model_name not in PD_REGISTRY:
+        return {
+            "status": "error",
+            "error": (
+                f"Unknown PD model: {model_name!r}. "
+                f"Available: {sorted(PD_REGISTRY)}"
+            ),
+        }
+
+    import numpy as np
+    from pkplugin.pd.predict import predict_pd
+
+    try:
+        t_arr = np.asarray(times, dtype=np.float64)
+        c_arr = np.asarray(concentrations, dtype=np.float64)
+        effects = predict_pd(model_name, params, c_arr, t_arr)
+        return {
+            "status": "ok",
+            "model_name": model_name,
+            "times": _serialise_for_json(list(times)),
+            "effects": _serialise_for_json(effects.tolist()),
+        }
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+
+def impl_fit_pd_model(
+    pd_dataset_path: str,
+    model_name: str,
+    initial_params: dict[str, float],
+    mode: str = "sequential",
+    weighting: str = "uniform",
+    winnonlin_version: str = "6.4",
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Fit a PD model to effect-time data and emit audit.
+
+    Loads a CSV with columns ``time``, ``concentration``, ``effect``.
+    Delegates fitting to :func:`pkplugin.pd.fitting.fit_pd_model`.
+
+    Returns a dict with:
+      - status: "ok" | "error"
+      - run_id, audit_path, fit_csv_path
+      - parameters, diagnostics, warnings
+
+    Refs: docs/03-algorithms/09-pkpd-models.md §2
+    """
+    from pkplugin.pd.models import PD_REGISTRY
+    from pkplugin.pd.fitting import fit_pd_model as _fit_pd_model, PDFitResult
+
+    if model_name not in PD_REGISTRY:
+        return {
+            "status": "error",
+            "error": (
+                f"Unknown PD model: {model_name!r}. "
+                f"Available: {sorted(PD_REGISTRY)}"
+            ),
+        }
+
+    ds_path = Path(pd_dataset_path).resolve()
+    if not ds_path.is_file():
+        return {"status": "error", "error": f"Dataset not found: {ds_path}"}
+
+    try:
+        df = pd.read_csv(ds_path)
+    except Exception as exc:
+        return {"status": "error", "error": f"Failed to read CSV: {exc}"}
+
+    required_cols = {"time", "concentration", "effect"}
+    missing = required_cols - set(df.columns)
+    if missing:
+        return {
+            "status": "error",
+            "error": f"Missing required columns: {sorted(missing)}",
+        }
+
+    import numpy as np
+
+    df = df.dropna(subset=["time", "concentration", "effect"])
+    times_arr = np.asarray(df["time"].tolist(), dtype=np.float64)
+    conc_arr = np.asarray(df["concentration"].tolist(), dtype=np.float64)
+    effect_arr = np.asarray(df["effect"].tolist(), dtype=np.float64)
+
+    _valid_modes = {"sequential", "simultaneous"}
+    if mode not in _valid_modes:
+        return {
+            "status": "error",
+            "error": f"Invalid mode {mode!r}. Choose from: {sorted(_valid_modes)}",
+        }
+
+    try:
+        fit: PDFitResult = _fit_pd_model(
+            times=times_arr,
+            observed_effects=effect_arr,
+            model_name=model_name,
+            initial_params=initial_params,
+            concentrations=conc_arr,
+            mode=mode,  # type: ignore[arg-type]
+            weighting=weighting,
+        )
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    parameters: dict[str, dict[str, Any]] = {}
+    for pname, est in fit.parameters.items():
+        se = fit.standard_errors.get(pname)
+        ci = fit.confidence_intervals.get(pname)
+        parameters[pname] = {
+            "estimate": _serialise_for_json(est),
+            "se": _serialise_for_json(se),
+            "ci_low": _serialise_for_json(ci[0] if ci else None),
+            "ci_high": _serialise_for_json(ci[1] if ci else None),
+        }
+
+    diagnostics: dict[str, Any] = {
+        "aic": _serialise_for_json(fit.diagnostics.aic),
+        "bic": _serialise_for_json(fit.diagnostics.bic),
+        "rss": _serialise_for_json(fit.diagnostics.rss),
+        "n_obs": fit.diagnostics.n_obs,
+        "n_params_estimated": fit.diagnostics.n_params_estimated,
+        "condition_number": _serialise_for_json(fit.diagnostics.condition_number),
+        "converged": fit.diagnostics.converged,
+        "method": fit.diagnostics.method,
+    }
+
+    entry: AuditEntry = new_entry(
+        tool="fit_pd_model",
+        config={
+            "model_name": model_name,
+            "initial_params": initial_params,
+            "mode": mode,
+            "weighting": weighting,
+            "winnonlin_version": winnonlin_version,
+        },
+        input_paths=[ds_path],
+        winnonlin_compat=winnonlin_version,
+    )
+    run_id = entry.run_id
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
+
+    fit_rows: list[dict[str, Any]] = []
+    for pname, pinfo in parameters.items():
+        fit_rows.append(
+            {
+                "run_id": run_id,
+                "model": model_name,
+                "parameter": pname,
+                "estimate": pinfo["estimate"],
+                "se": pinfo["se"],
+                "ci_low": pinfo["ci_low"],
+                "ci_high": pinfo["ci_high"],
+            }
+        )
+    fit_csv_path = run_dir / "pd_fit_result.csv"
+    pd.DataFrame(fit_rows).to_csv(fit_csv_path, index=False)
+
+    entry.results = {
+        "model_name": model_name,
+        "parameters": parameters,
+        "diagnostics": diagnostics,
+    }
+    entry.warnings = fit.warnings
+    entry.artifacts = [
+        {
+            "name": "pd_fit_result.csv",
+            "path": str(fit_csv_path),
+            "sha256": file_sha256(fit_csv_path),
+        }
+    ]
+    audit_json_path = entry.write(audit_base)
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "audit_path": str(audit_json_path),
+        "fit_csv_path": str(fit_csv_path),
+        "model_name": model_name,
+        "parameters": parameters,
+        "diagnostics": diagnostics,
+        "warnings": fit.warnings,
+    }
 
 
 def impl_get_winnonlin_versions() -> dict[str, Any]:
@@ -1235,6 +1527,42 @@ def _build_mcp() -> Any:
             weighting,
             residual_error,
             use_ode,
+            winnonlin_version,
+            audit_dir,
+        )
+
+    @mcp.tool
+    def list_pd_models() -> dict[str, Any]:
+        """Return all available PD model names and their parameter lists."""
+        return impl_list_pd_models()
+
+    @mcp.tool
+    def simulate_pd_model(
+        model_name: str,
+        params: dict[str, float],
+        times: list[float],
+        concentrations: list[float],
+    ) -> dict[str, Any]:
+        """Forward simulate a PD model; returns {times, effects}."""
+        return impl_simulate_pd_model(model_name, params, times, concentrations)
+
+    @mcp.tool
+    def fit_pd_model(
+        pd_dataset_path: str,
+        model_name: str,
+        initial_params: dict[str, float],
+        mode: str = "sequential",
+        weighting: str = "uniform",
+        winnonlin_version: str = "6.4",
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Fit a PD model to effect-time data + emit audit."""
+        return impl_fit_pd_model(
+            pd_dataset_path,
+            model_name,
+            initial_params,
+            mode,
+            weighting,
             winnonlin_version,
             audit_dir,
         )

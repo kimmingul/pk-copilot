@@ -4,23 +4,26 @@
 
 ## 1. 모델 카탈로그 (WinNonlin "PK Model" 번호 매핑)
 
-| WinNonlin Model # | 설명 | pk-copilot 코드 |
+| WinNonlin Model # | 설명 | pk-copilot 코드 (canonical) |
 |---|---|---|
 | 1 | 1-cmt IV bolus | `cmt1_iv_bolus` |
 | 2 | 1-cmt IV bolus + MM elim | `cmt1_iv_mm` |
 | 3 | 1-cmt IV infusion | `cmt1_iv_infusion` |
-| 4 | 1-cmt IV infusion + MM | `cmt1_iv_infusion_mm` |
+| 4 | 1-cmt IV infusion + MM | *(not implemented)* |
 | 5 | 1-cmt PO + lag | `cmt1_po` |
 | 6 | 1-cmt PO + MM | `cmt1_po_mm` |
 | 7 | 2-cmt IV bolus | `cmt2_iv_bolus` |
 | 8 | 2-cmt IV bolus + MM | `cmt2_iv_mm` |
 | 9 | 2-cmt IV infusion | `cmt2_iv_infusion` |
-| 10 | 2-cmt IV infusion + MM | `cmt2_iv_infusion_mm` |
+| 10 | 2-cmt IV infusion + MM | *(not implemented)* |
 | 11 | 2-cmt PO | `cmt2_po` |
-| 12 | 2-cmt PO + MM | `cmt2_po_mm` |
+| 12 | 2-cmt PO + MM | *(not implemented)* |
 | 13 | 3-cmt IV bolus | `cmt3_iv_bolus` |
-| 14 | 3-cmt IV infusion | `cmt3_iv_infusion` |
-| 15 | 3-cmt PO | `cmt3_po` |
+| 14 | 3-cmt IV infusion | *(not implemented)* |
+| 15 | 3-cmt PO | *(not implemented)* |
+
+**Canonical name convention**: Use the short form (e.g. `cmt1_iv_mm`, not `cmt1_iv_bolus_mm`).
+MM models are ODE-only (no closed-form solution); Vmax in concentration/time units, Km in concentration units.
 
 📋 TODO: WinNonlin 버전별 model 번호 매핑 (5.3/6.4/8.3) 정확히 검증
 
