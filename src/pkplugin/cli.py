@@ -197,6 +197,101 @@ def _cmd_sbom(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# 21 CFR Part 11 compliance subcommands
+# ---------------------------------------------------------------------------
+
+
+def _cmd_keygen(args: argparse.Namespace) -> int:
+    """Generate an Ed25519 keypair and save the private key."""
+    from pkplugin.compliance.signatures import generate_keypair, save_private_key
+    import pathlib
+
+    output_path = pathlib.Path(args.output)
+    passphrase_bytes: bytes | None = None
+    if args.passphrase:
+        import getpass
+        pw = getpass.getpass("Enter passphrase for private key: ")
+        pw2 = getpass.getpass("Confirm passphrase: ")
+        if pw != pw2:
+            print(json.dumps({"status": "error", "error": "Passphrases do not match"}), file=sys.stderr)
+            return 1
+        passphrase_bytes = pw.encode()
+
+    keypair = generate_keypair()
+    save_private_key(keypair, output_path, passphrase=passphrase_bytes)
+    pub_path = output_path.with_suffix(".pub")
+    pub_path.write_bytes(keypair.public_key_pem)
+
+    result = {
+        "status": "ok",
+        "private_key_path": str(output_path),
+        "public_key_path": str(pub_path),
+        "public_key_hex": keypair.public_key_hex,
+    }
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+def _cmd_sign(args: argparse.Namespace) -> int:
+    """Sign a run bundle."""
+    from pkplugin.mcp_server import impl_sign_record
+
+    result = impl_sign_record(
+        run_id=args.run_id,
+        signer_identity=args.identity,
+        meaning=args.meaning,
+        auth_token=args.auth_token or "",
+        private_key_path=args.key,
+        passphrase=args.passphrase,
+        audit_dir=args.out,
+    )
+    return _print_result(result)
+
+
+def _cmd_lock(args: argparse.Namespace) -> int:
+    """Lock a run bundle."""
+    from pkplugin.mcp_server import impl_lock_run
+
+    req_sigs: list[str] | None = None
+    if args.require_signatures:
+        req_sigs = [s.strip() for s in args.require_signatures.split(",")]
+
+    result = impl_lock_run(
+        run_id=args.run_id,
+        locked_by=args.locked_by or "cli-user",
+        lock_reason=args.reason,
+        require_signatures=req_sigs,
+        audit_dir=args.out,
+    )
+    return _print_result(result)
+
+
+def _cmd_verify_chain(args: argparse.Namespace) -> int:
+    """Verify audit chain integrity."""
+    from pkplugin.mcp_server import impl_verify_audit_chain
+
+    result = impl_verify_audit_chain(chain_dir=args.chain_dir)
+    return _print_result(result)
+
+
+def _cmd_verify_sigs(args: argparse.Namespace) -> int:
+    """Verify electronic signatures for a run."""
+    from pkplugin.mcp_server import impl_verify_signatures
+
+    result = impl_verify_signatures(run_id=args.run_id, audit_dir=args.out)
+    return _print_result(result)
+
+
+def _cmd_compliance_status(args: argparse.Namespace) -> int:  # noqa: ARG001
+    """Print v2.0 Part 11 control status."""
+    from pkplugin.mcp_server import impl_get_compliance_status
+
+    result = impl_get_compliance_status()
+    print(json.dumps(result, indent=2))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Parser construction
 # ---------------------------------------------------------------------------
 
@@ -263,6 +358,45 @@ def _build_parser() -> argparse.ArgumentParser:
         help="SBOM format (default: cyclonedx-json).",
     )
 
+    # -----------------------------------------------------------------------
+    # 21 CFR Part 11 compliance subcommands
+    # -----------------------------------------------------------------------
+
+    # keygen
+    p_keygen = sub.add_parser("keygen", help="Generate Ed25519 keypair for e-signatures.")
+    p_keygen.add_argument("--output", required=True, metavar="keys/myuser.key", help="Output path for private key PEM.")
+    p_keygen.add_argument("--passphrase", action="store_true", help="Prompt for passphrase to encrypt private key.")
+
+    # sign
+    p_sign = sub.add_parser("sign", help="Sign a run bundle (e-signature, §11.50).")
+    p_sign.add_argument("run_id", help="Run ID to sign.")
+    p_sign.add_argument("--identity", required=True, metavar="user@example.com", help="Signer identifier.")
+    p_sign.add_argument("--meaning", required=True, choices=["authored", "reviewed", "approved", "rejected"], help="Signature meaning.")
+    p_sign.add_argument("--key", required=True, metavar="keys/myuser.key", help="Path to Ed25519 private key.")
+    p_sign.add_argument("--passphrase", default=None, metavar="PASS", help="Key passphrase (if encrypted).")
+    p_sign.add_argument("--auth-token", default="", dest="auth_token", metavar="TOTP", help="Re-authentication token (TOTP placeholder).")
+    p_sign.add_argument("--out", metavar="runs/", default=None, help="Audit base directory.")
+
+    # lock
+    p_lock = sub.add_parser("lock", help="Finalize (lock) a run bundle (§11.10(c)).")
+    p_lock.add_argument("run_id", help="Run ID to lock.")
+    p_lock.add_argument("--reason", required=True, help="Lock reason (e.g. 'Final BE submission').")
+    p_lock.add_argument("--locked-by", default=None, dest="locked_by", help="Identifier of who is locking.")
+    p_lock.add_argument("--require-signatures", default=None, dest="require_signatures", metavar="authored,reviewed,approved", help="Comma-separated required signature meanings.")
+    p_lock.add_argument("--out", metavar="runs/", default=None, help="Audit base directory.")
+
+    # verify-chain
+    p_vchain = sub.add_parser("verify-chain", help="Verify audit chain integrity (§11.10(e)).")
+    p_vchain.add_argument("--chain-dir", default=None, dest="chain_dir", metavar="dir/", help="Chain directory (default: audit_dir).")
+
+    # verify-sigs
+    p_vsigs = sub.add_parser("verify-sigs", help="Verify electronic signatures for a run.")
+    p_vsigs.add_argument("run_id", help="Run ID to verify.")
+    p_vsigs.add_argument("--out", metavar="runs/", default=None, help="Audit base directory.")
+
+    # compliance-status
+    sub.add_parser("compliance-status", help="Print v2.0 Part 11 technical control status.")
+
     return parser
 
 
@@ -279,6 +413,13 @@ _COMMAND_MAP = {
     "compare": _cmd_compare,
     "doctor": _cmd_doctor,
     "sbom": _cmd_sbom,
+    # 21 CFR Part 11 compliance subcommands
+    "keygen": _cmd_keygen,
+    "sign": _cmd_sign,
+    "lock": _cmd_lock,
+    "verify-chain": _cmd_verify_chain,
+    "verify-sigs": _cmd_verify_sigs,
+    "compliance-status": _cmd_compliance_status,
 }
 
 

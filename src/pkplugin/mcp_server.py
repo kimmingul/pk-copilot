@@ -41,6 +41,45 @@ from pkplugin.nca.engine import calculate_nca
 from pkplugin.schemas import NCAConfig
 from pkplugin.version import DEFAULTS, WNVersion
 
+# ---------------------------------------------------------------------------
+# Part 11 chain-emission helper
+# ---------------------------------------------------------------------------
+
+def _emit_chain_entry(
+    run_dir: Path,
+    action: str,
+    user: dict[str, str] | None,
+    reason: str,
+    run_id: str,
+    after: dict[str, Any] | None = None,
+) -> None:
+    """Best-effort audit chain emission.
+
+    When PKPLUGIN_PART11_ENABLED=1 is set, emits an entry to the run's
+    audit chain.  If the compliance module is unavailable or chain emission
+    fails for any reason, silently continues so v1.x behaviour is preserved.
+    """
+    if os.environ.get("PKPLUGIN_PART11_ENABLED", "0") != "1":
+        return
+    try:
+        from pkplugin.compliance.audit_chain import AuditChain
+
+        effective_user: dict[str, str] = user or {
+            "id": "anonymous",
+            "auth_method": "anonymous",
+        }
+        chain = AuditChain.open(run_dir)
+        chain.append(
+            action=action,
+            user=effective_user,
+            reason=reason,
+            run_id=run_id,
+            after=after,
+        )
+    except Exception:
+        pass  # best-effort — do not break existing tool calls
+
+
 # Compartmental imports — resolved lazily inside each impl to avoid hard
 # failures when the module is imported without all optional deps present.
 # (These are always available in a normal pkplugin install.)
@@ -291,6 +330,16 @@ def impl_run_nca(
     # B4: pass audit_base so write() creates audit_base/run_id/audit.json (not double-nested)
     audit_json_path = entry.write(audit_base)
 
+    # Part 11 chain emission (best-effort, no-op when PKPLUGIN_PART11_ENABLED != 1)
+    _emit_chain_entry(
+        run_dir=run_dir,
+        action="run_nca",
+        user=None,
+        reason="NCA analysis run",
+        run_id=run_id,
+        after={"run_state": "draft", "n_subjects": len(results)},
+    )
+
     # Summary of headline parameters per subject for the chat response
     parameter_summary: list[dict[str, Any]] = []
     headline_keys = ("Cmax", "Tmax", "AUClast", "AUCINF_obs", "HL_Lambda_z")
@@ -502,6 +551,16 @@ def impl_run_be(
         }
     ]
     audit_json_path = entry.write(audit_base)
+
+    # Part 11 chain emission
+    _emit_chain_entry(
+        run_dir=run_dir,
+        action="run_be",
+        user=None,
+        reason="BE analysis run",
+        run_id=run_id,
+        after={"run_state": "draft", "be_demonstrated": result.be_demonstrated},
+    )
 
     return {
         "status": "ok",
@@ -1079,6 +1138,16 @@ def impl_fit_pk_model(
     ]
     audit_json_path = entry.write(audit_base)
 
+    # Part 11 chain emission
+    _emit_chain_entry(
+        run_dir=run_dir,
+        action="fit_pk_model",
+        user=None,
+        reason="PK model fitting run",
+        run_id=run_id,
+        after={"run_state": "draft", "model_name": model_name},
+    )
+
     return {
         "status": "ok",
         "run_id": run_id,
@@ -1369,6 +1438,16 @@ def impl_fit_pd_model(
         }
     ]
     audit_json_path = entry.write(audit_base)
+
+    # Part 11 chain emission
+    _emit_chain_entry(
+        run_dir=run_dir,
+        action="fit_pd_model",
+        user=None,
+        reason="PD model fitting run",
+        run_id=run_id,
+        after={"run_state": "draft", "model_name": model_name},
+    )
 
     return {
         "status": "ok",
@@ -2036,6 +2115,306 @@ def impl_validate_cdisc(
 
 
 # ---------------------------------------------------------------------------
+# 21 CFR Part 11 compliance implementation functions
+# ---------------------------------------------------------------------------
+
+
+def impl_sign_record(
+    run_id: str,
+    signer_identity: str,
+    meaning: str,
+    auth_token: str,
+    private_key_path: str,
+    passphrase: str | None = None,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Sign a run bundle with an Ed25519 key and record the event in the audit chain.
+
+    Args:
+        run_id: ID of the run to sign.
+        signer_identity: Signer identifier (e.g. email).
+        meaning: 'authored' | 'reviewed' | 'approved'.
+        auth_token: Re-authentication token (TOTP placeholder for v2.0).
+        private_key_path: Path to Ed25519 private key PEM file.
+        passphrase: Key passphrase if encrypted.
+        audit_dir: Base audit directory (default: PKPLUGIN_AUDIT_DIR or pk_runs/).
+    """
+    try:
+        from pkplugin.compliance.signatures import SignatureMeaning, sign_run
+        from pkplugin.compliance.audit_chain import AuditChain
+    except ImportError as exc:
+        return {"status": "error", "error": f"compliance module unavailable: {exc}"}
+
+    valid_meanings = {"authored", "reviewed", "approved", "rejected"}
+    if meaning not in valid_meanings:
+        return {
+            "status": "error",
+            "error": f"Invalid meaning {meaning!r}. Must be one of: {sorted(valid_meanings)}",
+        }
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+
+    if not run_dir.is_dir():
+        return {"status": "error", "error": f"Run directory not found: {run_dir}"}
+
+    key_path = Path(private_key_path)
+    if not key_path.is_file():
+        return {"status": "error", "error": f"Private key not found: {key_path}"}
+
+    passphrase_bytes = passphrase.encode() if passphrase else None
+
+    try:
+        sig = sign_run(
+            run_dir=run_dir,
+            signer_id=signer_identity,
+            meaning=meaning,  # type: ignore[arg-type]
+            private_key_path=key_path,
+            passphrase=passphrase_bytes,
+            require_reauth_token=auth_token if auth_token else None,
+        )
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    # Emit chain entry
+    try:
+        chain = AuditChain.open(run_dir)
+        chain.append(
+            action="sign_record",
+            user={"id": signer_identity, "auth_method": "totp+ed25519"},
+            reason=f"Signed as {meaning!r}",
+            run_id=run_id,
+            before=None,
+            after={"meaning": meaning, "run_hash": sig.run_hash},
+        )
+    except Exception:
+        pass  # chain emission is best-effort; signature already written
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "signer_id": sig.signer_id,
+        "meaning": sig.meaning,
+        "timestamp_utc": sig.timestamp_utc,
+        "run_hash": sig.run_hash,
+        "public_key_hex": sig.public_key_hex[:16] + "...",
+    }
+
+
+def impl_lock_run(
+    run_id: str,
+    locked_by: str,
+    lock_reason: str,
+    require_signatures: list[str] | None = None,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Finalize a run bundle: verify signatures, compute hash, set read-only.
+
+    Args:
+        run_id: ID of the run to lock.
+        locked_by: Identifier of who is locking.
+        lock_reason: Non-empty reason string.
+        require_signatures: Signature meanings required (default: authored, reviewed, approved).
+        audit_dir: Base audit directory.
+    """
+    try:
+        from pkplugin.compliance.retention import lock_run
+        from pkplugin.compliance.signatures import SignatureMeaning as _SM
+        from pkplugin.compliance.audit_chain import AuditChain
+    except ImportError as exc:
+        return {"status": "error", "error": f"compliance module unavailable: {exc}"}
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+
+    if not run_dir.is_dir():
+        return {"status": "error", "error": f"Run directory not found: {run_dir}"}
+
+    req_sigs: list[_SM] | None = None
+    if require_signatures is not None:
+        from typing import cast as _cast
+        _valid: set[str] = {"authored", "reviewed", "approved", "rejected"}
+        req_sigs = _cast(list[_SM], [s for s in require_signatures if s in _valid])
+
+    try:
+        manifest = lock_run(
+            run_dir=run_dir,
+            locked_by=locked_by,
+            lock_reason=lock_reason,
+            require_signatures=req_sigs,
+        )
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    # Emit chain entry (audit chain itself stays writable even after lock)
+    try:
+        chain = AuditChain.open(run_dir)
+        chain.append(
+            action="lock_run",
+            user={"id": locked_by, "auth_method": "admin"},
+            reason=lock_reason,
+            run_id=run_id,
+            before={"locked": False},
+            after={"locked": True, "bundle_sha256": manifest.bundle_sha256},
+        )
+    except Exception:
+        pass
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "locked_at_utc": manifest.locked_at_utc,
+        "locked_by": manifest.locked_by,
+        "bundle_sha256": manifest.bundle_sha256,
+        "signatures_required": manifest.signatures_required,
+    }
+
+
+def impl_verify_audit_chain(
+    chain_dir: str | None = None,
+) -> dict[str, Any]:
+    """Verify audit chain integrity.
+
+    Returns:
+        Dict with keys: ok, n_entries, violations.
+    """
+    try:
+        from pkplugin.compliance.audit_chain import AuditChain
+    except ImportError as exc:
+        return {"status": "error", "error": f"compliance module unavailable: {exc}"}
+
+    target = Path(chain_dir) if chain_dir else audit_dir_default()
+
+    try:
+        chain = AuditChain.open(target)
+        ok, violations = chain.verify()
+        n_entries = chain.length()
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    return {
+        "status": "ok",
+        "ok": ok,
+        "n_entries": n_entries,
+        "violations": violations,
+    }
+
+
+def impl_verify_signatures(
+    run_id: str,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Verify all electronic signatures for a run.
+
+    Returns:
+        Dict with keys: ok, n_signatures, failures.
+    """
+    try:
+        from pkplugin.compliance.signatures import verify_all_signatures, load_signatures
+    except ImportError as exc:
+        return {"status": "error", "error": f"compliance module unavailable: {exc}"}
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+
+    if not run_dir.is_dir():
+        return {"status": "error", "error": f"Run directory not found: {run_dir}"}
+
+    try:
+        ok, failures = verify_all_signatures(run_dir)
+        sigs = load_signatures(run_dir)
+    except Exception as exc:
+        return {"status": "error", "error": str(exc)}
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "ok": ok,
+        "n_signatures": len(sigs),
+        "signatures": [
+            {
+                "signer_id": s.signer_id,
+                "meaning": s.meaning,
+                "timestamp_utc": s.timestamp_utc,
+            }
+            for s in sigs
+        ],
+        "failures": failures,
+    }
+
+
+def impl_get_compliance_status() -> dict[str, Any]:
+    """Return v2.0 Part 11 control status.
+
+    Returns:
+        Dict describing which technical controls are available.
+    """
+    status: dict[str, Any] = {
+        "pkplugin_version": PKPLUGIN_VERSION,
+        "part11_version": "v2.0",
+    }
+
+    # Check cryptography availability
+    try:
+        import cryptography
+        status["cryptography_available"] = True
+        status["cryptography_version"] = cryptography.__version__
+    except ImportError:
+        status["cryptography_available"] = False
+        status["cryptography_version"] = None
+
+    # Check compliance sub-package
+    try:
+        from pkplugin.compliance import audit_chain, signatures, access, retention  # noqa: F401
+        status["compliance_module_available"] = True
+    except ImportError as exc:
+        status["compliance_module_available"] = False
+        status["compliance_module_error"] = str(exc)
+
+    # Check env flag
+    part11_enabled = os.environ.get("PKPLUGIN_PART11_ENABLED", "0") == "1"
+    status["part11_enabled"] = part11_enabled
+
+    # Check default chain dir
+    default_chain = audit_dir_default()
+    status["default_audit_dir"] = str(default_chain)
+    status["audit_dir_exists"] = default_chain.exists()
+
+    # Technical controls summary
+    status["controls"] = {
+        "audit_trail": {
+            "description": "Append-only HMAC hash-chained JSONL audit log",
+            "regulation": "§11.10(e)",
+            "available": status.get("compliance_module_available", False),
+        },
+        "electronic_signatures": {
+            "description": "Ed25519 detached signatures with two-factor auth placeholder",
+            "regulation": "§11.50, §11.70, §11.200",
+            "available": status.get("cryptography_available", False),
+        },
+        "access_control": {
+            "description": "RBAC (Viewer/Analyst/Approver/Admin) with session expiry",
+            "regulation": "§11.10(d), §11.10(g)",
+            "available": status.get("compliance_module_available", False),
+        },
+        "record_retention": {
+            "description": "WORM-friendly bundle finalization with read-only enforcement",
+            "regulation": "§11.10(c)",
+            "available": status.get("compliance_module_available", False),
+        },
+    }
+
+    disclaimer = (
+        "pk-copilot v2.0 provides technical controls to support Part 11 workflows. "
+        "21 CFR Part 11 compliance requires procedural controls by your organization. "
+        "See docs/10-21cfr-part11.md §16 for the full disclaimer."
+    )
+    status["disclaimer"] = disclaimer
+
+    return status
+
+
+# ---------------------------------------------------------------------------
 # fastmcp wrapper (only imported when actually running as MCP server)
 # ---------------------------------------------------------------------------
 
@@ -2261,6 +2640,53 @@ def _build_mcp() -> Any:
     ) -> dict[str, Any]:
         """Run Pinnacle21-style validation checks on an ADaM dataset (ADPC or ADPP)."""
         return impl_validate_cdisc(dataset_path, domain)
+
+    @mcp.tool
+    def sign_record(
+        run_id: str,
+        signer_identity: str,
+        meaning: str,
+        auth_token: str,
+        private_key_path: str,
+        passphrase: str | None = None,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Sign a run bundle with Ed25519 key (§11.50/§11.70/§11.200)."""
+        return impl_sign_record(
+            run_id, signer_identity, meaning, auth_token,
+            private_key_path, passphrase, audit_dir,
+        )
+
+    @mcp.tool
+    def lock_run(
+        run_id: str,
+        locked_by: str,
+        lock_reason: str,
+        require_signatures: list[str] | None = None,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Finalize a run bundle: verify signatures, set read-only (§11.10(c))."""
+        return impl_lock_run(run_id, locked_by, lock_reason, require_signatures, audit_dir)
+
+    @mcp.tool
+    def verify_audit_chain(
+        chain_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Verify audit chain integrity (§11.10(e))."""
+        return impl_verify_audit_chain(chain_dir)
+
+    @mcp.tool
+    def verify_signatures(
+        run_id: str,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Verify all electronic signatures for a run (§11.50/§11.70)."""
+        return impl_verify_signatures(run_id, audit_dir)
+
+    @mcp.tool
+    def get_compliance_status() -> dict[str, Any]:
+        """Return v2.0 Part 11 technical control status."""
+        return impl_get_compliance_status()
 
     return mcp
 
