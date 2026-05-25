@@ -1,0 +1,81 @@
+{
+  "source": "1-cmt oral first-order absorption (Bateman) — synthetic",
+  "description": "Three synthetic subjects generated from C(t) = F*D*ka/(V*(ka-k)) * (exp(-k*t) - exp(-ka*t)) with known PK parameters. Expected values were computed by running the pk-copilot engine (pkplugin.nca.engine.calculate_nca) on exact Bateman-equation concentrations sampled at t=[0,0.25,0.5,1,2,3.5,5,7,9,12,24].",
+  "model_params_per_subject": {
+    "Subject_A": {"F": 1.0, "D": 320.0, "V": 30.0, "ka": 1.5, "k": 0.08},
+    "Subject_B": {"F": 1.0, "D": 320.0, "V": 35.0, "ka": 1.2, "k": 0.10},
+    "Subject_C": {"F": 1.0, "D": 320.0, "V": 25.0, "ka": 2.0, "k": 0.07}
+  },
+  "winnonlin_version": "6.4",
+  "auc_method": "linear_up_log_down",
+  "lambda_z_method": "best_fit",
+  "known_engine_issues": [
+    "AUMClast: log-down interval AUMC formula uses wrong sign (minus instead of plus); produces large negative values. Known bug in pkplugin.nca.auc._log_interval AUMC term.",
+    "AUMClast: linear interval formula uses 0.5*(t1*c1+t2*c2)*dt which is the trapezoid of t*C(t), not the exact integral of t*C(t) when C is linear — off by ~1-2%. Known formula error.",
+    "AUMCINF_obs / AUMCINF_pred: derived from buggy AUMClast, values are incorrect.",
+    "MRTINF_obs / MRTINF_pred: None for oral route by engine design (PO MRT requires paired IV data per WinNonlin spec)."
+  ],
+  "expected": {
+    "Subject_A": {
+      "Cmax": 9.040639105,
+      "Tmax": 2.0,
+      "Tlast": 24.0,
+      "Clast": 1.651909432,
+      "AUClast": 112.1881626,
+      "Lambda_z": 0.07981885064,
+      "HL_Lambda_z": 8.684003528,
+      "No_points_lambda_z": 6.0,
+      "Rsq": 0.9999830835,
+      "Rsq_adjusted": 0.9999788544,
+      "Span_ratio": 2.36066233,
+      "Clast_pred": 1.653915544,
+      "AUCINF_obs": 132.8838932,
+      "AUC_%Extrap_obs": 15.57429583,
+      "CL_F": 2.408117284,
+      "Vz_F": 30.16978151
+    },
+    "Subject_B": {
+      "Cmax": 7.261218575,
+      "Tmax": 2.0,
+      "Tlast": 24.0,
+      "Clast": 0.9048232224,
+      "AUClast": 81.92144385,
+      "Lambda_z": 0.09987424009,
+      "HL_Lambda_z": 6.940199795,
+      "No_points_lambda_z": 5.0,
+      "Rsq": 0.9999959116,
+      "Rsq_adjusted": 0.9999945488,
+      "Span_ratio": 2.737673347,
+      "Clast_pred": 0.9054247267,
+      "AUCINF_obs": 90.98106945,
+      "AUC_%Extrap_obs": 9.95770401,
+      "CL_F": 3.517215196,
+      "Vz_F": 35.21644012
+    },
+    "Subject_C": {
+      "Cmax": 11.28844066,
+      "Tmax": 2.0,
+      "Tlast": 24.0,
+      "Clast": 2.47211077,
+      "AUClast": 147.0163125,
+      "Lambda_z": 0.06997111905,
+      "HL_Lambda_z": 9.906189725,
+      "No_points_lambda_z": 6.0,
+      "Rsq": 0.9999993523,
+      "Rsq_adjusted": 0.9999991904,
+      "Span_ratio": 2.069413222,
+      "Clast_pred": 2.472597011,
+      "AUCINF_obs": 182.3467574,
+      "AUC_%Extrap_obs": 19.37541717,
+      "CL_F": 1.75489822,
+      "Vz_F": 25.08032233
+    }
+  },
+  "tolerance": {
+    "default_relative": 1e-6,
+    "lambda_z_relative": 1e-6,
+    "auc_relative": 1e-6,
+    "rsq_relative": 1e-6,
+    "no_points_lambda_z_relative": 1e-9
+  }
+}

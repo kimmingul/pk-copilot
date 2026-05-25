@@ -12,24 +12,35 @@
 ---
 
 ## 1. Linear Trapezoidal
-구간 [t_i, t_{i+1}]:
+구간 [t_i, t_{i+1}], `dt = t_{i+1} - t_i`:
 ```
-AUC_i = 0.5 · (C_i + C_{i+1}) · (t_{i+1} - t_i)
-AUMC_i = 0.5 · (t_i · C_i + t_{i+1} · C_{i+1}) · (t_{i+1} - t_i)
+AUC_i  = 0.5 · (C_i + C_{i+1}) · dt
+AUMC_i = (dt / 6) · (2·t_i·C_i + t_i·C_{i+1} + t_{i+1}·C_i + 2·t_{i+1}·C_{i+1})
 ```
 
+**AUMC 유도**: `C(t)`를 `[t_i, t_{i+1}]`에서 선형 보간하면
+`∫ t·C(t) dt` 의 정확한 적분이 위 식이다. (단순히
+`0.5·(t_i·C_i + t_{i+1}·C_{i+1})·dt` 와 같이 `t·C` 자체에 사다리꼴 규칙을
+적용하면 단조 곡선에서 체계적 편향이 발생하므로 사용 금지.)
+
 **장점**: 단순, 0/음수 농도 안전
-**단점**: 감소 구간을 과대평가 (지수 감소 곡선에서)
+**단점**: 감소 구간 AUC를 과대평가 (지수 감소 곡선에서)
 
 ---
 
 ## 2. Log Trapezoidal
-양수 감소 구간 (`C_i > C_{i+1} > 0`):
+양수 감소 구간 (`C_i > C_{i+1} > 0`), `dt = t_{i+1} - t_i`:
 ```
-AUC_i = (C_i - C_{i+1}) · (t_{i+1} - t_i) / ln(C_i / C_{i+1})
-AUMC_i = (t_{i+1} - t_i) · (t_i · C_i - t_{i+1} · C_{i+1}) / ln(C_i / C_{i+1})
-       - (t_{i+1} - t_i)² · (C_i - C_{i+1}) / (ln(C_i / C_{i+1}))²
+AUC_i  = (C_i - C_{i+1}) · dt / ln(C_i / C_{i+1})
+AUMC_i = dt  · (t_i · C_i - t_{i+1} · C_{i+1}) / ln(C_i / C_{i+1})
+       + dt² · (C_i - C_{i+1})                / (ln(C_i / C_{i+1}))²
 ```
+
+**AUMC 유도**: 구간 안에서 `C(t) = C_i · exp(-λ(t-t_i))`,
+`λ = ln(C_i/C_{i+1})/dt` 로 가정 후 `∫ t · C(t) dt` 를 닫힌 형태로 적분하면
+두 번째 항의 부호가 **`+`** 이다. (예전 표기에서 `-` 로 잘못 적혀
+있던 것을 1-cmt IV bolus AUMC_inf = D/(V·k²) closed-form 과 대조하여
+검증했음.)
 
 **예외**: `C_i = C_{i+1}` 또는 `C_i ≤ 0` 또는 `C_{i+1} ≤ 0` → **linear로 폴백**
 - 폴백 발생 시 audit log에 기록
@@ -85,10 +96,11 @@ def auc_trapezoid(times, conc, method="linear_up_log_down"):
             ln_ratio = math.log(c1 / c2)
             d_auc = (c1 - c2) * dt / ln_ratio
             d_aumc = dt * (t1*c1 - t2*c2) / ln_ratio \
-                   - dt**2 * (c1 - c2) / ln_ratio**2
+                   + dt**2 * (c1 - c2) / ln_ratio**2
         else:
             d_auc = 0.5 * (c1 + c2) * dt
-            d_aumc = 0.5 * (t1*c1 + t2*c2) * dt
+            # 정확한 linear AUMC = ∫t·C(t)dt with linear C interpolation
+            d_aumc = (dt / 6) * (2*t1*c1 + t1*c2 + t2*c1 + 2*t2*c2)
             if method == "log":
                 flags.append(("log_to_linear_fallback", i))
 
