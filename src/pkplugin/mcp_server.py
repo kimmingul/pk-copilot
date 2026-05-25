@@ -1382,6 +1382,210 @@ def impl_fit_pd_model(
     }
 
 
+def impl_generate_report(
+    run_id: str,
+    format: str = "html",
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Generate a report from an existing audit run.
+
+    Reloads the run from ``<audit_dir>/<run_id>/audit.json`` +
+    ``parameters.csv`` and renders via the appropriate report.* function.
+
+    Args:
+        run_id: The run ID of a previous ``run_nca`` or ``run_be`` invocation.
+        format: Output format — ``"html"`` or ``"pdf"``.
+        audit_dir: Override for the audit base directory.
+
+    Returns:
+        dict with status, run_id, report_path on success.
+    """
+    if format not in ("html", "pdf"):
+        return {
+            "status": "error",
+            "error": f"Invalid format {format!r}. Choose 'html' or 'pdf'.",
+        }
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+
+    audit_json = run_dir / "audit.json"
+    if not audit_json.is_file():
+        return {
+            "status": "error",
+            "error": f"audit.json not found for run_id={run_id!r}: {audit_json}",
+        }
+
+    try:
+        with open(audit_json) as fh:
+            audit_data = json.load(fh)
+    except Exception as exc:
+        return {"status": "error", "error": f"Failed to read audit.json: {exc}"}
+
+    tool = audit_data.get("tool", "")
+    ext = format
+    report_path = run_dir / f"report.{ext}"
+
+    try:
+        if tool == "run_nca":
+            # Reload NCA results from parameters.csv by re-running NCA
+            # (lightweight: reconstruct NCAResult list from audit data)
+            params_csv = run_dir / "parameters.csv"
+            if not params_csv.is_file():
+                return {
+                    "status": "error",
+                    "error": f"parameters.csv not found for run_id={run_id!r}",
+                }
+
+            # Extract input dataset path from audit
+            input_files = audit_data.get("input_files", [])
+            if not input_files:
+                return {
+                    "status": "error",
+                    "error": "No input_files recorded in audit.json",
+                }
+            dataset_path = input_files[0].get("path", "")
+            cfg_dict = audit_data.get("config", {})
+
+            nca_result_dict = impl_run_nca(
+                dataset_path=dataset_path,
+                config=cfg_dict,
+                audit_dir=str(audit_base),
+            )
+            if nca_result_dict.get("status") != "ok":
+                return {
+                    "status": "error",
+                    "error": f"Failed to re-run NCA: {nca_result_dict.get('error')}",
+                }
+
+            # For HTML report, build from the CSV directly via render_html_report
+            from pkplugin.report.html import render_html_report
+            from pkplugin.report.pdf import render_pdf_report
+
+            df = pd.read_csv(params_csv)
+            # Build param table HTML inline
+            headers = "".join(f"<th>{c}</th>" for c in df.columns)
+            rows_html = ""
+            for _, row in df.iterrows():
+                cells = "".join(
+                    f"<td>{'' if (v is None or (isinstance(v, float) and v != v)) else v}</td>"
+                    for v in row
+                )
+                rows_html += f"<tr>{cells}</tr>"
+            param_table_html = f"<table><thead><tr>{headers}</tr></thead><tbody>{rows_html}</tbody></table>"
+
+            sections: list[dict[str, Any]] = [
+                {
+                    "heading": "NCA Parameter Table",
+                    "content_html": param_table_html,
+                    "plot_paths": [],
+                }
+            ]
+            metadata_report: dict[str, str] = {
+                "run_id": run_id,
+                "plugin_version": PKPLUGIN_VERSION,
+                "winnonlin_compat": str(cfg_dict.get("winnonlin_version", "6.4")),
+                "timestamp": audit_data.get("run_timestamp_utc", ""),
+            }
+            if format == "html":
+                render_html_report(
+                    title=f"NCA Report — Run {run_id}",
+                    metadata=metadata_report,
+                    sections=sections,
+                    output_path=report_path,
+                )
+            else:
+                render_pdf_report(
+                    title=f"NCA Report — Run {run_id}",
+                    sections=sections,
+                    output_path=report_path,
+                    metadata=metadata_report,
+                )
+
+        elif tool == "run_be":
+            # Reload BE result from audit JSON results field
+            be_data = audit_data.get("results", {})
+            if not be_data:
+                return {
+                    "status": "error",
+                    "error": "No results in audit.json for BE run",
+                }
+
+            from pkplugin.report.html import render_html_report
+            from pkplugin.report.pdf import render_pdf_report
+
+            # Build a simple BE summary directly from audit data
+            gmr = be_data.get("gmr_pct")
+            ci_low = be_data.get("ci_90_low_pct")
+            ci_high = be_data.get("ci_90_high_pct")
+            be_demo = be_data.get("be_demonstrated")
+            be_window = be_data.get("be_window", [80.0, 125.0])
+
+            if be_demo is True:
+                verdict = f"BIOEQUIVALENCE DEMONSTRATED — GMR: {gmr:.4f}% (90% CI: {ci_low:.4f}%–{ci_high:.4f}%) within [{be_window[0]:.2f}%, {be_window[1]:.2f}%]"
+                verdict_class = "verdict-pass"
+            elif be_demo is False:
+                verdict = f"BIOEQUIVALENCE NOT DEMONSTRATED — GMR: {gmr:.4f}% (90% CI: {ci_low:.4f}%–{ci_high:.4f}%)"
+                verdict_class = "verdict-fail"
+            else:
+                verdict = "BE CONCLUSION UNAVAILABLE"
+                verdict_class = "verdict-na"
+
+            verdict_html = f'<div class="{verdict_class}">{verdict}</div>'
+
+            sections_be: list[dict[str, Any]] = [
+                {
+                    "heading": "Bioequivalence Verdict",
+                    "content_html": verdict_html,
+                    "plot_paths": [],
+                },
+                {
+                    "heading": "BE Summary",
+                    "content_html": f"<pre>{json.dumps(be_data, indent=2)}</pre>",
+                    "plot_paths": [],
+                },
+            ]
+            cfg_dict = audit_data.get("config", {})
+            metadata_report_be: dict[str, str] = {
+                "run_id": run_id,
+                "plugin_version": PKPLUGIN_VERSION,
+                "endpoint": str(be_data.get("endpoint", "")),
+                "design": str(be_data.get("design", "")),
+                "timestamp": str(audit_data.get("run_timestamp_utc", "")),
+            }
+            if format == "html":
+                render_html_report(
+                    title=f"BE Report — Run {run_id}",
+                    metadata=metadata_report_be,
+                    sections=sections_be,
+                    output_path=report_path,
+                )
+            else:
+                render_pdf_report(
+                    title=f"BE Report — Run {run_id}",
+                    sections=sections_be,
+                    output_path=report_path,
+                    metadata=metadata_report_be,
+                )
+        else:
+            return {
+                "status": "error",
+                "error": f"Unsupported tool {tool!r} for report generation. Supported: run_nca, run_be.",
+            }
+
+    except ImportError as exc:
+        return {"status": "error", "error": str(exc)}
+    except Exception as exc:
+        return {"status": "error", "error": f"Report generation failed: {exc}"}
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "report_path": str(report_path),
+        "format": format,
+    }
+
+
 def impl_get_winnonlin_versions() -> dict[str, Any]:
     """List supported WinNonlin versions + their default option matrix."""
     return {
@@ -1394,6 +1598,202 @@ def impl_get_winnonlin_versions() -> dict[str, Any]:
 
 def impl_get_pkplugin_version() -> str:
     return PKPLUGIN_VERSION
+
+
+def impl_r_backend_status() -> dict[str, Any]:
+    """Expose check_r_backend() to the MCP layer.
+
+    Returns a dict describing whether Rscript, PKNCA, and NonCompart are
+    available on the host, along with version strings.
+
+    Refs: docs/08-validation-strategy.md §4
+    """
+    from pkplugin.validation.r_backend import check_r_backend
+
+    status = check_r_backend()
+    return {
+        "available": status.available,
+        "rscript_path": status.rscript_path,
+        "r_version": status.r_version,
+        "pknca_version": status.pknca_version,
+        "noncompart_version": status.noncompart_version,
+        "error": status.error,
+    }
+
+
+def impl_compare_against_reference(
+    run_id: str,
+    reference_backend: str = "pknca",
+    tolerance_relative: float = 1e-6,
+    audit_dir: str | None = None,
+) -> dict[str, Any]:
+    """Compare a previous pk-copilot NCA run against PKNCA or NonCompart.
+
+    Steps:
+      1. Resolve <audit_dir>/<run_id>/ and load parameters.csv.
+      2. Check R availability — return status="r_unavailable" if absent.
+      3. Run scripts/run_r_pknca.R or run_r_noncompart.R via subprocess.
+      4. Compute diff via compute_diff.
+      5. Write validation_diff.json into the run directory.
+      6. Return summary dict.
+
+    Args:
+        run_id: The NCA run ID whose parameters.csv we compare.
+        reference_backend: "pknca" or "noncompart".
+        tolerance_relative: Relative tolerance for within-tolerance check.
+        audit_dir: Override for the audit base directory.
+
+    Returns:
+        dict with status, overall_passed, n_compared, n_outside_tolerance,
+        diff_path, and (if any outside tolerance) outside_tolerance_diffs.
+
+    Refs: docs/06-mcp-server.md §8, docs/08-validation-strategy.md §4
+    """
+    from pkplugin.validation.r_backend import (
+        RBackendStatus,
+        check_r_backend,
+        run_r_noncompart,
+        run_r_pknca,
+    )
+    from pkplugin.validation.diff import compute_diff, write_validation_diff_json
+
+    backend_key = reference_backend.lower().strip()
+    if backend_key not in ("pknca", "noncompart"):
+        return {
+            "status": "error",
+            "error": (
+                f"Unknown reference_backend {reference_backend!r}. "
+                "Choose 'pknca' or 'noncompart'."
+            ),
+        }
+
+    audit_base = Path(audit_dir) if audit_dir else audit_dir_default()
+    run_dir = audit_base / run_id
+    parameters_csv = run_dir / "parameters.csv"
+
+    if not parameters_csv.is_file():
+        return {
+            "status": "error",
+            "error": (
+                f"parameters.csv not found for run_id={run_id!r}: {parameters_csv}"
+            ),
+        }
+
+    # Step 2 — check R availability
+    r_status: RBackendStatus = check_r_backend()
+    if not r_status.available:
+        return {
+            "status": "r_unavailable",
+            "available": False,
+            "error": r_status.error,
+            "rscript_path": r_status.rscript_path,
+            "r_version": r_status.r_version,
+            "pknca_version": r_status.pknca_version,
+            "noncompart_version": r_status.noncompart_version,
+        }
+
+    # Step 3 — resolve original input dataset from audit.json
+    # audit.json uses "input_files": [{"path": ..., "sha256": ...}, ...]
+    dataset_csv_path: Path | None = None
+    dose_csv_path: Path | None = None
+    audit_json = run_dir / "audit.json"
+    if audit_json.is_file():
+        try:
+            audit_data: dict[str, Any] = json.loads(audit_json.read_text())
+            input_files: list[Any] = audit_data.get("input_files", [])
+            for inp in input_files:
+                if isinstance(inp, dict):
+                    p = Path(inp.get("path", ""))
+                else:
+                    p = Path(str(inp))
+                if p.suffix.lower() == ".csv" and p.is_file():
+                    if dataset_csv_path is None:
+                        dataset_csv_path = p
+                    else:
+                        dose_csv_path = p
+        except Exception:
+            pass
+
+    if dataset_csv_path is None:
+        return {
+            "status": "error",
+            "error": (
+                f"Could not resolve input dataset for run_id={run_id!r}. "
+                "Ensure audit.json contains an 'inputs' list with valid paths."
+            ),
+        }
+
+    r_output_dir = run_dir / "r_validation"
+    try:
+        if backend_key == "pknca":
+            r_result = run_r_pknca(
+                dataset_csv=dataset_csv_path,
+                dose_csv=dose_csv_path,
+                output_dir=r_output_dir,
+            )
+            backend_label = "PKNCA"
+        else:
+            r_result = run_r_noncompart(
+                dataset_csv=dataset_csv_path,
+                dose_csv=dose_csv_path,
+                output_dir=r_output_dir,
+            )
+            backend_label = "NonCompart"
+    except Exception as exc:
+        return {"status": "error", "error": f"R subprocess error: {exc}"}
+
+    if r_result.return_code != 0:
+        return {
+            "status": "error",
+            "error": (
+                f"R script exited {r_result.return_code}. "
+                f"stderr: {r_result.raw_stderr[:500]}"
+            ),
+        }
+
+    if not r_result.parameter_table_csv.is_file():
+        return {
+            "status": "error",
+            "error": "R script completed but output CSV was not created.",
+        }
+
+    diff = compute_diff(
+        pkplugin_parameters_csv=parameters_csv,
+        reference_parameters_csv=r_result.parameter_table_csv,
+        tolerance_relative=tolerance_relative,
+        r_status=r_status,
+        reference_backend=backend_label,
+        run_id=run_id,
+    )
+
+    diff_json_path = write_validation_diff_json(
+        diff, run_dir / "validation_diff.json"
+    )
+
+    outside_diffs: list[dict[str, Any]] = [
+        {
+            "subject_id": d.subject_id,
+            "parameter": d.parameter,
+            "pkcopilot_value": d.pkcopilot_value,
+            "reference_value": d.reference_value,
+            "absolute_diff": d.absolute_diff,
+            "relative_diff": d.relative_diff,
+        }
+        for d in diff.diffs
+        if not d.within_tolerance and d.absolute_diff is not None
+    ]
+
+    return {
+        "status": "ok",
+        "run_id": run_id,
+        "reference_backend": backend_label,
+        "overall_passed": diff.overall_passed,
+        "n_compared": diff.n_compared,
+        "n_within_tolerance": diff.n_within_tolerance,
+        "n_outside_tolerance": diff.n_outside_tolerance,
+        "diff_path": str(diff_json_path),
+        "outside_tolerance_diffs": outside_diffs,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1565,6 +1965,32 @@ def _build_mcp() -> Any:
             weighting,
             winnonlin_version,
             audit_dir,
+        )
+
+    @mcp.tool
+    def generate_report(
+        run_id: str,
+        format: str = "html",
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Generate a report from an existing audit run (NCA or BE)."""
+        return impl_generate_report(run_id, format, audit_dir)
+
+    @mcp.tool
+    def r_backend_status() -> dict[str, Any]:
+        """Probe local R + PKNCA/NonCompart installation status."""
+        return impl_r_backend_status()
+
+    @mcp.tool
+    def compare_against_reference(
+        run_id: str,
+        reference_backend: str = "pknca",
+        tolerance_relative: float = 1e-6,
+        audit_dir: str | None = None,
+    ) -> dict[str, Any]:
+        """Compare a previous NCA run against PKNCA or NonCompart."""
+        return impl_compare_against_reference(
+            run_id, reference_backend, tolerance_relative, audit_dir
         )
 
     return mcp
