@@ -4,6 +4,7 @@ Locks in the positioning shift from 'Part 11 compliant' overclaim to
 'Part 11-enabling controls for the deterministic execution path; LLM
 orchestration exploratory unless qualified under customer QMS'.
 """
+
 from __future__ import annotations
 
 from pathlib import Path

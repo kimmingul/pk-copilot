@@ -1,4 +1,5 @@
 """Regression tests for AuditEntry / AuditChain execution_mode threading."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -117,7 +118,9 @@ def test_tampering_with_mode_breaks_chain(tmp_path: Path) -> None:
 # ---------- impl_run_nca returns execution_mode in result ----------
 
 
-def test_impl_run_nca_returns_execution_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_impl_run_nca_returns_execution_mode(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Default (no env) should produce exploratory mode in the response."""
     monkeypatch.delenv("PKPLUGIN_PART11_ENABLED", raising=False)
     # Ensure MCP context default (LLM orchestrated) doesn't break the test

@@ -115,7 +115,9 @@ def _cmd_nca(args: argparse.Namespace) -> int:
         audit_dir=args.out,
         user=user,
     )
-    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    mode = (
+        result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    )
     _print_mode_hint(mode)
     return _print_result(result)
 
@@ -133,7 +135,9 @@ def _cmd_be(args: argparse.Namespace) -> int:
         design=args.design,
         user=user,
     )
-    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    mode = (
+        result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    )
     _print_mode_hint(mode)
     return _print_result(result)
 
@@ -158,7 +162,9 @@ def _cmd_fit(args: argparse.Namespace) -> int:
         dose=args.dose,
         user=user,
     )
-    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    mode = (
+        result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    )
     _print_mode_hint(mode)
     return _print_result(result)
 
@@ -182,7 +188,9 @@ def _cmd_pd_fit(args: argparse.Namespace) -> int:
         initial_params=init_params,
         user=user,
     )
-    mode = result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    mode = (
+        result.get("execution_mode", "exploratory") if isinstance(result, dict) else "exploratory"
+    )
     _print_mode_hint(mode)
     return _print_result(result)
 
