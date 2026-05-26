@@ -46,6 +46,9 @@ pk-copilot/
 │   ├── nca-analyst.md
 │   ├── pk-modeler.md
 │   ├── pd-modeler.md
+│   ├── be-analyst.md
+│   ├── cdisc-mapper.md
+│   ├── compliance-officer.md
 │   ├── report-writer.md
 │   └── data-curator.md
 │
@@ -98,8 +101,8 @@ pk-copilot/
 │   ├── report/
 │   │   ├── tables.py                     # WinNonlin-스타일 파라미터 표
 │   │   ├── plots.py                      # matplotlib / plotly
-│   │   ├── pdf.py                        # reportlab
-│   │   └── quarto.py                     # quarto 렌더링
+│   │   ├── html.py                       # HTML 보고서 렌더링
+│   │   └── pdf.py                        # reportlab PDF 렌더링
 │   │
 │   ├── cdisc/                            # v2
 │   │   ├── sdtm.py                       # PC/EX/DM 도메인

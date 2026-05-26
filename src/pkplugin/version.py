@@ -37,34 +37,48 @@ class WNVersion(str, Enum):
 
 
 # Default option matrix per WinNonlin version.
-# Any value that is None means "not yet validated against the manual" — implementations
-# should treat None as 'use 6.4 default' until a TODO in docs/04 is resolved.
 DEFAULTS: dict[WNVersion, dict[str, Any]] = {
     WNVersion.V5_3: {
-        "auc_method": "linear",  # 📋 TODO confirm 5.3 GUI default
+        # WNL 5.3 default AUC method: Method 2 "Linear trapezoidal rule (Linear interpolation)".
+        # Ref: WNL 5.3 User's Guide NCA METHOD command ref (METHOD 2 = default) and NCA
+        # Settings tab description. "linear_up_log_down" is available but not the default.
+        "auc_method": "linear",
         "lambda_z_method": "best_fit",
+        # lambda_z_tolerance: confirmed 0.0001 in WNL 5.3 User's Guide ~line 6443.
         "lambda_z_tolerance": 0.0001,
         "lambda_z_min_points": 3,
-        "c0_method": "observed",
-        "output_pred_variants": False,
+        # c0_method: WNL 5.3 IV bolus C0 default is log back-extrapolation from first two
+        # data points. Falls back to first observed positive y-value if slope >= 0, y-values
+        # are 0, or points are outliers. Algorithm is identical to 6.4/8.3.
+        # Ref: WNL 5.3 User's Guide "Insertion of initial time points" (~p.196).
+        # "observed"/"log_back_extrap" are plugin-internal labels; WNL has no GUI dropdown.
+        "c0_method": "log_back_extrap",
+        # WNL 5.3 emits _pred variants: Clast_pred, AUCINF_pred, AUC_%Extrap_pred,
+        # AUMCINF_pred, MRTINF_pred, VSS_pred — confirmed in WNL 5.3 Table B-4 (~p.512-514).
+        "output_pred_variants": True,
         "bloq_policy": {
             "pre_dose": "zero",
             "up_leading": "zero",
             "embedded": "missing",
             "trailing": "exclude",
         },
-        # WinNonlin 5.3 did not emit a span-ratio warning. We keep a
-        # conservative default of 1.5 (matching 6.4+) so users moving
-        # between versions are not surprised by silent omission of a
-        # clinically meaningful guard. Set to 0.0 to disable entirely.
+        # span_ratio_min: WNL 5.3 does not have a span ratio feature. This 1.5 is a
+        # plugin-internal conservative default (industry practice), not a WNL engine
+        # value. Set to 0.0 to disable entirely.
         "span_ratio_min": 1.5,
         "comp_weighting_default": "uniform",
     },
     WNVersion.V6_4: {
-        "auc_method": "linear_up_log_down",
+        # WNL 6.4 default AUC method: "Linear Trapezoidal Linear Interpolation".
+        # Ref: WNL 6.4 User's Guide p.22 "This is the default method".
+        # "linear_up_log_down" (Linear Up Log Down) is available but not the default.
+        "auc_method": "linear",
         "lambda_z_method": "best_fit",
+        # lambda_z_tolerance: confirmed 0.0001 in WNL 6.4 User's Guide ~line 1870.
         "lambda_z_tolerance": 0.0001,
         "lambda_z_min_points": 3,
+        # c0_method: WNL 6.4 log back-extrapolation from first two data points.
+        # "observed"/"log_back_extrap" are plugin-internal labels; WNL has no GUI dropdown.
         "c0_method": "log_back_extrap",
         "output_pred_variants": True,
         "bloq_policy": {
@@ -73,14 +87,23 @@ DEFAULTS: dict[WNVersion, dict[str, Any]] = {
             "embedded": "missing",
             "trailing": "exclude",
         },
+        # span_ratio_min: WNL 6.4 does not have a span ratio feature. This 1.5 is a
+        # plugin-internal conservative default (industry practice), not a WNL engine
+        # value. Set to 0.0 to disable entirely.
         "span_ratio_min": 1.5,
         "comp_weighting_default": "1_over_y_squared",
     },
     WNVersion.V8_3: {
-        "auc_method": "linear_up_log_down",
+        # WNL 8.3 default AUC method: "Linear Trapezoidal Linear Interpolation".
+        # Ref: WNL 8.3 User's Guide "This is the default method and recommended for Drug
+        # Effect Data". "linear_up_log_down" is available but not the default.
+        "auc_method": "linear",
         "lambda_z_method": "best_fit",
+        # lambda_z_tolerance: confirmed 0.0001 in WNL 8.3 User's Guide ~line 6053.
         "lambda_z_tolerance": 0.0001,
         "lambda_z_min_points": 3,
+        # c0_method: WNL 8.3 log back-extrapolation from first two data points.
+        # "observed"/"log_back_extrap" are plugin-internal labels; WNL has no GUI dropdown.
         "c0_method": "log_back_extrap",
         "output_pred_variants": True,
         "bloq_policy": {
@@ -89,6 +112,9 @@ DEFAULTS: dict[WNVersion, dict[str, Any]] = {
             "embedded": "missing",
             "trailing": "exclude",
         },
+        # span_ratio_min: WNL 8.3 supports user-defined Span acceptance criterion (Rules
+        # tab) but has no built-in default threshold. This 1.5 is a plugin-internal default
+        # (industry practice). Users can override via acceptance_criteria config.
         "span_ratio_min": 1.5,
         "comp_weighting_default": "1_over_y_squared",
     },

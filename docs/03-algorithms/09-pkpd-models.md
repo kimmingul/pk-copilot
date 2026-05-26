@@ -16,10 +16,11 @@
 
 ### 1.2 Effect Compartment (Hull-Sheiner)
 ```
-dCe/dt = ke0 · (Cp - Ce)
+dCe/dt = Ke0 · (Cp - Ce)
 E(t) = f(Ce(t))                # 위 direct 모델 중 하나
 ```
 - 효과 부위 농도 `Ce` 가 plasma `Cp` 와 시간차
+- 파라미터명: `Ke0` (capital K, capital zero; WNL 6.4 p.385 convention)
 
 ### 1.3 Indirect Response Models (Jusko/Dayneka I-IV)
 
@@ -33,8 +34,8 @@ R_ss = kin / kout
 |---|---|---|
 | IRM-I | Inhibition of production | `dR/dt = kin · (1 - Imax·C/(IC50+C)) - kout · R` |
 | IRM-II | Inhibition of loss | `dR/dt = kin - kout · (1 - Imax·C/(IC50+C)) · R` |
-| IRM-III | Stimulation of production | `dR/dt = kin · (1 + Smax·C/(SC50+C)) - kout · R` |
-| IRM-IV | Stimulation of loss | `dR/dt = kin - kout · (1 + Smax·C/(SC50+C)) · R` |
+| IRM-III | Stimulation of production | `dR/dt = kin · (1 + Emax·C/(EC50+C)) - kout · R` |
+| IRM-IV | Stimulation of loss | `dR/dt = kin - kout · (1 + Emax·C/(EC50+C)) · R` |
 
 ### 1.4 Turnover with Effect Compartment
 조합:
@@ -93,7 +94,7 @@ E vs C 그릴 때 시간 진행 방향 화살표:
 | `Emax` | [Effect] | 최대 효과 |
 | `EC50` | [Conc] | 50% 효과 농도 |
 | `γ` (Hill) | — | sigmoid 기울기 (1=단순 Emax) |
-| `ke0` | 1/[Time] | 효과실 평형 상수 |
+| `Ke0` | 1/[Time] | 효과실 평형 상수 (WNL 6.4 p.385 naming) |
 | `kin` | [R]/[Time] | 0차 생성 속도 |
 | `kout` | 1/[Time] | 1차 소실 속도 |
 
@@ -125,7 +126,26 @@ E vs C 그릴 때 시간 진행 방향 화살표:
 
 ## 6. WinNonlin PD 모델 번호 매핑
 
-WinNonlin은 PD에도 모델 번호를 부여 (101+ 등). 📋 TODO: 매뉴얼 §11 참조하여 정확 매핑.
+WinNonlin PD 모델 번호 (WNL 6.4 UG §11; WNL 8.3 UG §12):
+
+| WNL Model # | 모델 | pk-copilot 코드 |
+|---|---|---|
+| 101 | Linear E = E0 + S·C | `linear` |
+| 102 | Log-linear E = E0 + S·ln(C) | `log_linear` |
+| 103 | Emax (WNL 5.3: Sigmoid Emax) | `emax` |
+| 104 | Sigmoid Emax (Hill) | `sigmoid_emax` |
+| 105 | Inhibitory Emax | `inhibitory_emax` |
+| 106 | Effect Compartment (Ke0) | `effect_compartment` |
+| 107 | IDR-I (Inhibit production) | `idr_i` |
+| 108 | IDR-II (Inhibit loss) | `idr_ii` |
+| 109 | IDR-III (Stimulate production) | `idr_iii` |
+| 110 | IDR-IV (Stimulate loss) | `idr_iv` |
+
+**IDR III/IV parameter naming**: WNL uses `Emax`/`EC50` for stimulation models (same as inhibition models use
+`Imax`/`IC50`). The older notation `Smax`/`SC50` is not used by WinNonlin (WNL 6.4 UG §11.3).
+
+**Version note**: WNL 5.3 Model 103 is Sigmoid Emax; WNL 6.4+ Model 103 is plain Emax and Model 104 is
+Sigmoid Emax. Adjust model number when comparing 5.3 vs 6.4+ output (WNL 6.4 UG §11.1).
 
 ---
 

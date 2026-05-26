@@ -132,8 +132,10 @@ C(t) = exp( ln C_i + (ln C_{i+1} - ln C_i) · (t - t_i) / (t_{i+1} - t_i) )
 
 | 버전 | 기본 보간 | t1=0 IV C0 처리 |
 |---|---|---|
-| WinNonlin 5.3 | linear | observed first conc |
-| WinNonlin 6.4 | linear-up/log-down | log back-extrapolation |
-| WinNonlin 8.3 | linear-up/log-down | log back-extrapolation |
+| WinNonlin 5.3 | linear | log back-extrapolation (WNL 5.3 p.196) |
+| WinNonlin 6.4 | linear | log back-extrapolation (WNL 6.4 UG §7.3) |
+| WinNonlin 8.3 | linear | log back-extrapolation (WNL 8.3 UG §8.2) |
 
-📋 TODO: 5.3/6.4/8.3 매뉴얼에서 partial AUC 보간 기본값 정확히 검증
+All three versions use `linear` (Linear Trapezoidal Linear Interpolation) as the default partial AUC
+interpolation method, consistent with the NCA AUC default. The `linear-up/log-down` option is available
+but not the default in any WinNonlin version (WNL 6.4 UG §7.2.3; WNL 8.3 UG §8.2.1).

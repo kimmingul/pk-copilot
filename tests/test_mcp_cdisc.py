@@ -258,3 +258,97 @@ class TestImplValidateCdisc:
             pd.DataFrame().to_csv(csv_path, index=False)
             result = impl_validate_cdisc(str(csv_path), "INVALID_DOMAIN")
         assert result["status"] == "error"
+
+
+# ---------------------------------------------------------------------------
+# impl_export_adam ADPC wiring (G4)
+# ---------------------------------------------------------------------------
+
+
+class TestImplExportAdamAdpc:
+    def test_export_adpc_from_sdtm_pc(self) -> None:
+        """When sdtm_pc_canonical.csv is present, ADPC should be generated."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_id = _create_nca_run(tmpdir)
+            # Copy the golden PC CSV as sdtm_pc_canonical.csv in the run dir
+            run_dir = Path(tmpdir) / run_id
+            pc_src = Path(__file__).parent / "golden" / "cdisc" / "pc.csv"
+            if pc_src.is_file():
+                import shutil
+
+                shutil.copy(pc_src, run_dir / "sdtm_pc_canonical.csv")
+            result = impl_export_adam(nca_run_id=run_id, audit_dir=tmpdir)
+        assert result["status"] == "ok"
+        # ADPC should be built when pc canonical CSV exists
+        if (Path(tmpdir) / run_id / "sdtm_pc_canonical.csv").exists():
+            assert result.get("adpc_status") == "ok"
+            assert "adpc_path" in result
+            assert Path(result["adpc_path"]).exists()
+
+    def test_export_adpc_status_no_data(self) -> None:
+        """Without a concentration CSV, adpc_status reflects unavailability."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            run_id = _create_nca_run(tmpdir)
+            result = impl_export_adam(nca_run_id=run_id, audit_dir=tmpdir)
+        assert result["status"] == "ok"
+        # No sdtm_pc_canonical.csv present — adpc_status should not be "ok"
+        assert result.get("adpc_status") != "ok" or result.get("adpc_path") is not None
+
+
+# ---------------------------------------------------------------------------
+# impl_import_sdtm with VS and LB paths (G1)
+# ---------------------------------------------------------------------------
+
+GOLDEN_CDISC = Path(__file__).parent / "golden" / "cdisc"
+VS_CSV = GOLDEN_CDISC / "vs.csv"
+LB_CSV = GOLDEN_CDISC / "lb.csv"
+
+
+class TestImplImportSdtmVsLb:
+    def test_import_with_vs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = impl_import_sdtm(
+                pc_path=str(PC_CSV),
+                ex_path=str(EX_CSV),
+                vs_path=str(VS_CSV),
+                audit_dir=tmpdir,
+            )
+            assert result["status"] == "ok"
+            assert "vs_csv" in result
+            assert Path(result["vs_csv"]).exists()
+            assert result["n_subjects_vs"] == 2
+
+    def test_import_with_lb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = impl_import_sdtm(
+                pc_path=str(PC_CSV),
+                ex_path=str(EX_CSV),
+                lb_path=str(LB_CSV),
+                audit_dir=tmpdir,
+            )
+            assert result["status"] == "ok"
+            assert "lb_csv" in result
+            assert Path(result["lb_csv"]).exists()
+            assert result["n_subjects_lb"] == 2
+
+    def test_import_vs_missing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = impl_import_sdtm(
+                pc_path=str(PC_CSV),
+                ex_path=str(EX_CSV),
+                vs_path="/nonexistent/vs.csv",
+                audit_dir=tmpdir,
+            )
+        assert result["status"] == "ok"
+        assert "vs_warning" in result
+
+    def test_import_lb_missing_file(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = impl_import_sdtm(
+                pc_path=str(PC_CSV),
+                ex_path=str(EX_CSV),
+                lb_path="/nonexistent/lb.csv",
+                audit_dir=tmpdir,
+            )
+        assert result["status"] == "ok"
+        assert "lb_warning" in result

@@ -106,7 +106,9 @@ PD_REGISTRY: dict[str, PDModelSpec] = {
     "effect_compartment": PDModelSpec(
         "effect_compartment",
         PDModelType.EFFECT_COMPARTMENT,
-        ("E0", "Emax", "EC50", "ke0"),
+        # Ke0: capital K per WNL convention — WNL 6.4 p.385 "Exit rate constant from
+        # effect compartment". Internal ODE code uses lowercase ke0 for the variable.
+        ("E0", "Emax", "EC50", "Ke0"),
         True,
         False,
     ),
@@ -127,14 +129,18 @@ PD_REGISTRY: dict[str, PDModelSpec] = {
     "idr_iii": PDModelSpec(
         "idr_iii",
         PDModelType.IDR_III_STIM_PRODUCTION,
-        ("kin", "kout", "Smax", "SC50"),
+        # WNL Model 53 params: Kin, Kout, EC50, Emax (all versions).
+        # Ref: WNL 6.4 p.238, WNL 8.3 p.223. "Smax"/"SC50" are not WNL terminology.
+        ("kin", "kout", "Emax", "EC50"),
         True,
         False,
     ),
     "idr_iv": PDModelSpec(
         "idr_iv",
         PDModelType.IDR_IV_STIM_LOSS,
-        ("kin", "kout", "Smax", "SC50"),
+        # WNL Model 54 params: Kin, Kout, EC50, Emax (all versions).
+        # Ref: WNL 6.4 p.238, WNL 8.3 p.223. "Smax"/"SC50" are not WNL terminology.
+        ("kin", "kout", "Emax", "EC50"),
         True,
         False,
     ),

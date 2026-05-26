@@ -511,6 +511,163 @@ def load_sdtm_ex(
 # ---------------------------------------------------------------------------
 
 
+REQUIRED_VS_COLS = [
+    "STUDYID",
+    "USUBJID",
+    "VSSEQ",
+    "VSTESTCD",
+    "VSSTRESN",
+    "VSSTRESU",
+]
+
+REQUIRED_LB_COLS = [
+    "STUDYID",
+    "USUBJID",
+    "LBSEQ",
+    "LBTESTCD",
+    "LBSTRESN",
+    "LBSTRESU",
+]
+
+_WEIGHT_TESTCDS = frozenset({"WEIGHT", "BWT", "BODYWEIGHT"})
+_RENAL_TESTCDS = frozenset({"CREAT", "CRCL", "EGFR", "CRCL_C"})
+
+
+def load_sdtm_vs(
+    path: str | Path,
+    *,
+    testcd_filter: frozenset[str] | None = None,
+) -> pd.DataFrame:
+    """Load SDTM VS domain and return a canonical weight covariate DataFrame.
+
+    Filters to weight-related test codes (WEIGHT, BWT, BODYWEIGHT) by default.
+
+    Required columns: STUDYID, USUBJID, VSSEQ, VSTESTCD, VSSTRESN, VSSTRESU.
+
+    Canonical columns returned: subject_id, weight_kg, weight_dtc.
+
+    Args:
+        path: Path to VS domain CSV or XPT file.
+        testcd_filter: Set of VSTESTCD values to accept.  Defaults to
+            ``{"WEIGHT", "BWT", "BODYWEIGHT"}``.
+
+    Returns:
+        Canonical covariate-style DataFrame (one row per subject, last weight
+        record wins when multiple records exist per subject).
+    """
+    df = _load_domain(path)
+
+    missing = [c for c in REQUIRED_VS_COLS if c not in df.columns]
+    if missing:
+        raise ValueError(f"VS domain missing required columns: {missing}")
+
+    effective_filter = testcd_filter if testcd_filter is not None else _WEIGHT_TESTCDS
+    df = df[df["VSTESTCD"].str.strip().str.upper().isin({t.upper() for t in effective_filter})]
+
+    rows: list[dict[str, Any]] = []
+    for _, row in df.iterrows():
+        subject_id = str(row["USUBJID"]).strip()
+        vsstresn = row.get("VSSTRESN", "")
+        try:
+            weight_kg: float | None = (
+                float(str(vsstresn).strip())
+                if str(vsstresn).strip() not in ("", "nan", "NaN")
+                else None
+            )
+        except (ValueError, TypeError):
+            weight_kg = None
+
+        weight_dtc: str | None = None
+        for dtc_col in ("VSDTC", "VSDY"):
+            if dtc_col in df.columns:
+                v = str(row.get(dtc_col, "")).strip()
+                if v not in ("", "nan", "NaN"):
+                    weight_dtc = v
+                    break
+
+        rows.append(
+            {
+                "subject_id": subject_id,
+                "weight_kg": weight_kg,
+                "weight_dtc": weight_dtc,
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame(columns=["subject_id", "weight_kg", "weight_dtc"])
+
+    out_df = pd.DataFrame(rows)
+    # One row per subject — keep last record (most recent weight)
+    out_df = out_df.groupby("subject_id", sort=False).last().reset_index()
+    return out_df
+
+
+def load_sdtm_lb(
+    path: str | Path,
+    *,
+    testcd_filter: frozenset[str] | None = None,
+) -> pd.DataFrame:
+    """Load SDTM LB domain and return a canonical renal markers DataFrame.
+
+    Filters to creatinine / clearance-related test codes
+    (CREAT, CRCL, EGFR) by default.
+
+    Required columns: STUDYID, USUBJID, LBSEQ, LBTESTCD, LBSTRESN, LBSTRESU.
+
+    Canonical columns returned: subject_id, crcl, egfr, creatinine.
+
+    Args:
+        path: Path to LB domain CSV or XPT file.
+        testcd_filter: Set of LBTESTCD values to accept.  Defaults to
+            ``{"CREAT", "CRCL", "EGFR"}``.
+
+    Returns:
+        Canonical DataFrame (one row per subject, last record wins).
+    """
+    df = _load_domain(path)
+
+    missing = [c for c in REQUIRED_LB_COLS if c not in df.columns]
+    if missing:
+        raise ValueError(f"LB domain missing required columns: {missing}")
+
+    effective_filter = testcd_filter if testcd_filter is not None else _RENAL_TESTCDS
+    df = df[df["LBTESTCD"].str.strip().str.upper().isin({t.upper() for t in effective_filter})]
+
+    # Pivot: one row per subject with crcl, egfr, creatinine columns
+    subject_data: dict[str, dict[str, float | None]] = {}
+    for _, row in df.iterrows():
+        subject_id = str(row["USUBJID"]).strip()
+        testcd = str(row.get("LBTESTCD", "")).strip().upper()
+        lbstresn = row.get("LBSTRESN", "")
+        try:
+            val: float | None = (
+                float(str(lbstresn).strip())
+                if str(lbstresn).strip() not in ("", "nan", "NaN")
+                else None
+            )
+        except (ValueError, TypeError):
+            val = None
+
+        if subject_id not in subject_data:
+            subject_data[subject_id] = {"crcl": None, "egfr": None, "creatinine": None}
+
+        if testcd in ("CRCL", "CRCL_C"):
+            subject_data[subject_id]["crcl"] = val
+        elif testcd == "EGFR":
+            subject_data[subject_id]["egfr"] = val
+        elif testcd == "CREAT":
+            subject_data[subject_id]["creatinine"] = val
+
+    if not subject_data:
+        return pd.DataFrame(columns=["subject_id", "crcl", "egfr", "creatinine"])
+
+    rows_out: list[dict[str, Any]] = []
+    for subject_id, vals in subject_data.items():
+        rows_out.append({"subject_id": subject_id, **vals})
+
+    return pd.DataFrame(rows_out)
+
+
 def load_sdtm_dm(path: str | Path) -> pd.DataFrame:
     """Load SDTM DM domain and return canonical covariate DataFrame.
 

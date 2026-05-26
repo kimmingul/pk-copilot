@@ -47,10 +47,13 @@ AUC_τ = ∫_{t_dose}^{t_dose + τ} C(t) dt
 Fluctuation = (Cmax_ss - Cmin_ss) / Cavg_ss × 100   [%]
 ```
 
-### 2.7 Swing
+### 2.7 Swing (WinNonlin 8.3+)
 ```
-Swing = (Cmax_ss - Cmin_ss) / Cmin_ss × 100         [%]
+Swing = (Cmax_ss - Cmin_ss) / Cmin_ss               [ratio, dimensionless]
 ```
+- **No ×100 multiplier**: Swing is a ratio, not a percent (WinNonlin 8.3 UG §8.3).
+- **Version availability**: WinNonlin 8.3 only. Not reported in 5.3 or 6.4.
+- Related parameters (8.3): `Swing_Tau`, `Fluctuation%_Tau`
 
 ### 2.8 Accumulation Ratio
 첫 투여 후 vs 정상상태 AUC 비율:
@@ -106,8 +109,8 @@ def steady_state_params(times, conc, dose, tau, t_dose=0.0, method="linear_up_lo
 
     # 4) Derived
     cavg_ss = auc_tau / tau
-    fluctuation = (cmax_ss - cmin_ss) / cavg_ss * 100
-    swing = (cmax_ss - cmin_ss) / cmin_ss * 100
+    fluctuation = (cmax_ss - cmin_ss) / cavg_ss * 100  # percent
+    swing = (cmax_ss - cmin_ss) / cmin_ss               # ratio (WNL 8.3 UG §8.3; no ×100)
 
     return SteadyStateResult(
         cmax_ss=cmax_ss, tmax_ss=tmax_ss,
@@ -130,13 +133,18 @@ def steady_state_params(times, conc, dose, tau, t_dose=0.0, method="linear_up_lo
 | Cavg_ss | 6.7 | ng/mL | AUC_tau / tau |
 | AUC_tau | 80.4 | ng·h/mL | linear-up/log-down |
 | Fluctuation | 138.8 | % | |
-| Swing | 300.0 | % | |
+| Swing | 3.0 | — | ratio (WNL 8.3+ only; no ×100) |
 | Rac (AUC) | 1.85 | — | vs first dose |
 
 ---
 
 ## 6. 버전 차이
 
-📋 TODO: 매뉴얼별 Fluctuation/Swing 정의 차이 검증
-- WinNonlin 5.3: Fluctuation 정의가 (Cmax-Cmin)/Cavg 인지 확인
-- WinNonlin 6.4/8.3: 동일 정의 추정
+| 파라미터 | WinNonlin 5.3 | WinNonlin 6.4 | WinNonlin 8.3 |
+|---|---|---|---|
+| Fluctuation | `(Cmax_ss - Cmin_ss) / Cavg_ss × 100` | 동일 | 동일 |
+| Swing | 미출력 | 미출력 | `(Cmax_ss - Cmin_ss) / Cmin_ss` (ratio, no ×100) |
+| Swing_Tau | 미출력 | 미출력 | 지원 |
+| Fluctuation%_Tau | 미출력 | 미출력 | 지원 |
+
+Sources: WinNonlin 8.3 UG §8.3 (Swing definition confirmed as ratio); WinNonlin 5.3/6.4 UG (Swing not listed in steady-state parameter tables).

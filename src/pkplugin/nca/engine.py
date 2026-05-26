@@ -78,7 +78,10 @@ _UNITS: dict[str, str] = {
     "Lambda_z": "1/h",
     "Rsq": "",
     "Rsq_adjusted": "",
-    "No_points_lambda_z": "",
+    # WNL canonical name: No_points_Lambda_z (capital L) — WNL 6.4 p.45, WNL 8.3 p.146.
+    "No_points_Lambda_z": "",
+    # WNL canonical name: Span (not Span_ratio) — WNL 8.3 p.147:
+    # Span = (Lambda_z_upper - Lambda_z_lower) / HL_Lambda_z
     "Span_ratio": "",
     "AUClast": "ng·h/mL",
     "AUMClast": "ng·h²/mL",
@@ -94,7 +97,10 @@ _UNITS: dict[str, str] = {
     "CL_F": "L/h",
     "Vz": "L",
     "Vz_F": "L",
-    "Vss": "L",
+    # WNL 8.3 uses Vss_obs/Vss_pred (lowercase ss); WNL 6.4 uses VSS_obs/VSS_pred (uppercase).
+    # We follow WNL 8.3 convention.
+    "Vss_obs": "L",
+    "Vss_pred": "L",
 }
 
 
@@ -403,6 +409,10 @@ def calculate_nca_subject(
         if aucinf_obs > 0:
             auc_extrap_obs = 100.0 * (aucinf_obs - auc_last) / aucinf_obs
             if auc_extrap_obs > 20.0:
+                # Plugin-policy warning: 20% threshold follows FDA/EMA convention.
+                # WinNonlin does NOT enforce 20% automatically — WNL 8.3 lets users
+                # define their own acceptance criterion in the Rules tab; WNL 5.3/6.4
+                # have no automatic threshold at all.
                 warnings.append("auc_extrap_high")
                 flags_map.setdefault("AUC_%Extrap_obs", []).append("auc_extrap_high")
 
@@ -517,10 +527,14 @@ def calculate_nca_subject(
         "Lambda_z": lambda_z,
         "Lambda_z_lower": lz_result.t_start,
         "Lambda_z_upper": lz_result.t_end,
-        "No_points_lambda_z": float(lz_result.n_points) if lz_result.n_points else None,
+        # WNL canonical name: No_points_Lambda_z (capital L) — WNL 6.4 p.45, 8.3 p.146.
+        "No_points_Lambda_z": float(lz_result.n_points) if lz_result.n_points else None,
         "Rsq": lz_result.r_squared,
         "Rsq_adjusted": lz_result.adjusted_r_squared,
         "Span": span,
+        # Span_ratio: plugin-internal name for the ratio value; WNL 8.3 output name is
+        # "Span" (= (Lambda_z_upper - Lambda_z_lower)/HL_Lambda_z). We keep Span_ratio
+        # as our internal key to distinguish it from the "Span" (time span in hours above).
         "Span_ratio": lz_result.span_ratio,
         "HL_Lambda_z": half_life,
         "AUCINF_obs": aucinf_obs,
@@ -542,7 +556,9 @@ def calculate_nca_subject(
         params["MRTINF_pred"] = mrt_pred
 
     if use_iv_names and vss is not None:
-        params["Vss"] = vss
+        # WNL 8.3: Vss_obs / Vss_pred (lowercase ss); WNL 6.4: VSS_obs / VSS_pred.
+        # We follow WNL 8.3 convention. Only obs variant is computed via NCA.
+        params["Vss_obs"] = vss
 
     # Add partial AUCs
     params.update(partial_aucs)

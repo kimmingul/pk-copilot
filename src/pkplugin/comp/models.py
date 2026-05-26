@@ -74,14 +74,14 @@ REGISTRY: dict[str, PKModelSpec] = {
     ),
     "cmt1_iv_infusion": PKModelSpec(
         name="cmt1_iv_infusion",
-        winnonlin_model_id=3,
+        winnonlin_model_id=2,  # WNL Model 2: IV-infusion, 1-cmt, 1st-order elim
         n_compartments=1,
         route=CompartmentRoute.IV_INFUSION,
         parameter_names=("V", "k"),
     ),
     "cmt1_po": PKModelSpec(
         name="cmt1_po",
-        winnonlin_model_id=5,
+        winnonlin_model_id=3,  # WNL Model 3: 1st-order input, 1-cmt, no lag
         n_compartments=1,
         route=CompartmentRoute.ORAL,
         parameter_names=("V_F", "ka", "k"),
@@ -110,7 +110,7 @@ REGISTRY: dict[str, PKModelSpec] = {
     ),
     "cmt3_iv_bolus": PKModelSpec(
         name="cmt3_iv_bolus",
-        winnonlin_model_id=13,
+        winnonlin_model_id=18,  # WNL Model 18: IV-bolus, 3-cmt, macro params
         n_compartments=3,
         route=CompartmentRoute.IV_BOLUS,
         parameter_names=("V1", "k10", "k12", "k21", "k13", "k31"),
@@ -119,9 +119,13 @@ REGISTRY: dict[str, PKModelSpec] = {
     # These are discoverable through REGISTRY so list_models()/CDISC tools see
     # them, but ``pkplugin.comp.analytic.predict`` rejects them — they must be
     # evaluated via ``pkplugin.comp.ode.simulate_ode``.
+    #
+    # MM models live in the separate WinNonlin MM.LIB library (Models 301–304).
+    # The precise WNL model number mapping requires MM.LIB documentation which
+    # is not currently available. winnonlin_model_id is None until confirmed.
     "cmt1_iv_mm": PKModelSpec(
         name="cmt1_iv_mm",
-        winnonlin_model_id=2,
+        winnonlin_model_id=None,  # MM.LIB Models 301-304; exact id requires MM.LIB docs
         n_compartments=1,
         route=CompartmentRoute.IV_BOLUS,
         parameter_names=("V", "Vmax", "Km"),
@@ -129,7 +133,7 @@ REGISTRY: dict[str, PKModelSpec] = {
     ),
     "cmt1_po_mm": PKModelSpec(
         name="cmt1_po_mm",
-        winnonlin_model_id=6,
+        winnonlin_model_id=None,  # MM.LIB Models 301-304; exact id requires MM.LIB docs
         n_compartments=1,
         route=CompartmentRoute.ORAL,
         parameter_names=("V_F", "ka", "Vmax", "Km"),
@@ -137,7 +141,7 @@ REGISTRY: dict[str, PKModelSpec] = {
     ),
     "cmt2_iv_mm": PKModelSpec(
         name="cmt2_iv_mm",
-        winnonlin_model_id=8,
+        winnonlin_model_id=None,  # No 2-cmt MM model confirmed in WNL MM.LIB 301-304
         n_compartments=2,
         route=CompartmentRoute.IV_BOLUS,
         parameter_names=("V1", "Vmax", "Km", "k12", "k21"),

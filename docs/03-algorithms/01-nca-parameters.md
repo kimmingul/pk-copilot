@@ -17,8 +17,7 @@
 Cmax = max{ C_i : i = 1..n, C_i ≠ BLOQ }
 ```
 - **단위**: [Conc]
-- **버전 차이**: 동일
-- 📋 TODO: cite manual
+- **버전 차이**: 동일 (WNL 5.3 p.194; WNL 6.4 UG §7.3; WNL 8.3 UG §8.2)
 
 ### 1.2 Tmax — Time of Maximum Concentration
 ```
@@ -51,10 +50,12 @@ Clast_pred = exp(intercept_λz - λz · Tlast)
 - 말단상 회귀 결과로부터 외삽
 
 ### 1.7 C0 — Estimated Concentration at Time Zero (IV bolus only)
-- **버전별 차이**:
-  - **WinNonlin 5.3**: C0 = first observed concentration (단순)
-  - **WinNonlin 6.4+**: C0 = back-extrapolation from first two quantifiable points (log-linear)
-- **알고리즘 옵션**: `c0_method: "observed" | "log_back_extrap" | "auto"`
+- **알고리즘**: All versions (5.3, 6.4, 8.3) use **log back-extrapolation** from the first two quantifiable
+  post-dose points. The formula is `C0 = exp(intercept)` where the intercept is from `ln C ~ t` regression
+  on points 1–2 (WNL 5.3 p.196; WNL 6.4 UG §7.3; WNL 8.3 UG §8.2).
+- **알고리즘 옵션** (`c0_method`): plugin-internal labels — `"log_back_extrap"` (default for all versions) |
+  `"observed"` (use first quantifiable concentration; non-WNL) | `"auto"` (alias for `"log_back_extrap"`).
+  The `"observed"` label is a plugin convenience option and does not correspond to any WinNonlin version default.
 
 ### 1.8 Ctrough / Cmin (Steady-state)
 - 정상상태 dosing interval 내 최소 농도
@@ -77,9 +78,8 @@ AUC_0-t = ∫₀^Tlast C(t) dt
 AUCINF_obs  = AUC_0-t + Clast / λz
 AUCINF_pred = AUC_0-t + Clast_pred / λz
 ```
-- **버전별 기본값**:
-  - WinNonlin 5.3: `AUCINF_obs` 만 출력
-  - WinNonlin 6.4+: 둘 다 출력
+- **버전별 기본값**: All versions (5.3, 6.4, 8.3) output both `AUCINF_obs` and `AUCINF_pred`.
+  (WNL 5.3 Table B-4 lists both; WNL 6.4/8.3 UG confirm same.)
 
 ### 2.3 AUC_%Extrap
 ```
@@ -121,7 +121,7 @@ MRT_pred = AUMC_inf_pred / AUCINF_pred
 MRT_infusion = AUMC_inf / AUCINF - T_inf / 2
 ```
 - `T_inf` = infusion duration
-- **버전 차이**: WinNonlin 5.3 vs 6.4+ MRT 정의 변경 가능 → 04-version-matrix 확인
+- **버전 차이**: WinNonlin 5.3 uses `AUMC/AUC` (no T_inf/2 correction per WNL 5.3 p.199); 6.4+ subtracts T_inf/2 (WNL 6.4 UG §7.3.5). See 04-winnonlin-version-matrix §1.
 
 #### MRT for PO
 ```
@@ -185,7 +185,7 @@ Vss = CL · MRT
 - `Cmax_ss`, `Tmax_ss`, `Cmin_ss`, `Ctrough_ss`
 - `Cavg_ss = AUC_tau / τ`
 - `Fluctuation = (Cmax_ss - Cmin_ss) / Cavg_ss × 100`
-- `Swing = (Cmax_ss - Cmin_ss) / Cmin_ss × 100`
+- `Swing = (Cmax_ss - Cmin_ss) / Cmin_ss` (ratio, no ×100; WNL 8.3 only)
 - `Accumulation Ratio Rac = AUC_tau,ss / AUC_tau,first`
 
 ---
@@ -225,10 +225,10 @@ WinNonlin 호환 long-format:
 
 | 데이터셋 | 출처 | 적용 알고리즘 | 기준 |
 |---|---|---|---|
-| Theophylline (12명) | PKNCA fixture | linear-up/log-down + Best Fit λz | ≤ 1e-6 상대오차 |
+| Theophylline (12명) | PKNCA fixture | linear + Best Fit λz (WNL 6.4 default) | ≤ 1e-6 상대오차 |
 | Indomethacin | PKNCA fixture | 동일 | 동일 |
-| WinNonlin 6.4 §7 예제 | 매뉴얼 | 매뉴얼 명세 | 매뉴얼 결과 |
-| WinNonlin 5.3 예제 | 매뉴얼 | 5.3 기본값 | 매뉴얼 결과 |
-| WinNonlin 8.3 예제 | 매뉴얼 | 8.3 기본값 | 매뉴얼 결과 |
+| WinNonlin 6.4 §7 예제 | 매뉴얼 | linear (WNL 6.4 UG default) | 매뉴얼 결과 |
+| WinNonlin 5.3 예제 | 매뉴얼 | linear + log_back_extrap C0 (5.3 기본값) | 매뉴얼 결과 |
+| WinNonlin 8.3 예제 | 매뉴얼 | linear (8.3 기본값; 5.3/6.4와 동일) | 매뉴얼 결과 |
 
 > 매뉴얼 예제별 골든 데이터는 `tests/golden/winnonlin-{version}/` 에 위치.

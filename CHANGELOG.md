@@ -2,6 +2,124 @@
 
 All notable changes to pk-copilot are documented in this file.
 
+## [2.0.2] - 2026-05-26
+
+### Fixed — Manual cross-verification of every algorithm default
+
+5-agent parallel audit of all four bundled Phoenix WinNonlin manuals
+(5.3 / 6.4 / 8.3 / Phoenix 1.4) closed every `📋 TODO: cite manual`
+marker and uncovered multiple **incorrect defaults** that we had been
+inheriting from informal sources. Numerical correctness fixes:
+
+- **AUC method default**: WinNonlin 5.3 / 6.4 / 8.3 NCA defaults are
+  **all `linear` trapezoid** (Method 2 "Linear Trapezoidal Linear
+  Interpolation"). Previously we shipped 6.4/8.3 as `linear_up_log_down`
+  by default — that is an *available option*, not the default. Existing
+  callers can request the old behavior explicitly via
+  `NCAConfig(auc_method="linear_up_log_down")`.
+- **C0 method for v5.3**: WinNonlin 5.3 uses **log back-extrapolation
+  from the first two quantifiable points** (identical algorithm to
+  6.4/8.3) — we had wrongly set 5.3 to `"observed"`.
+- **v5.3 `_pred` variants**: WNL 5.3 Table B-4 confirms the manual
+  emits `Clast_pred`, `AUCINF_pred`, `AUC_%Extrap_pred`,
+  `AUMCINF_pred`, `MRTINF_pred`, `VSS_pred`. We had wrongly marked 5.3
+  as obs-only. `output_pred_variants` default for 5.3 changed
+  `False → True`.
+- **Lambda_z Tmax inclusion is version-aware**:
+  - WNL 5.3 NCA ("Points prior to Cmax"): the Cmax data point itself
+    MAY enter the Best Fit candidate windows → `fit_lambda_z` now uses
+    `t >= tmax` for `winnonlin_version="5.3"`.
+  - WNL 6.4 / 8.3 ("Points prior to Cmax, **and the point at Cmax for
+    non-bolus models**"): Cmax point explicitly excluded → continues
+    `t > tmax` (strict).
+- **Output column names**: corrected `No_points_lambda_z` →
+  `No_points_Lambda_z` (capital L per WNL output); `Vss` →
+  `Vss_obs` / `Vss_pred` per WNL 8.3 column convention.
+- **PK Model registry numbering** (`comp/models.py`): every
+  WinNonlin model id was wrong. Confirmed correct mapping from manuals:
+  Model 1 = 1-cmt IV bolus, Model 2 = 1-cmt IV infusion (was: bolus+MM),
+  Model 3 = 1-cmt extravascular no lag (was: IV infusion),
+  Model 18 = 3-cmt IV bolus (was: 13), and MM variants live in the
+  separate MM.LIB (Models 301–304) so `winnonlin_model_id=None` for
+  our `cmt*_mm` entries.
+- **PD model numbering**: WNL PD models are 101–110, not "101+". Added
+  full mapping table. WNL Model 103 changed between 5.3 (Sigmoid Emax)
+  and 6.4+ (plain Emax with new IC50 naming).
+- **IDR III / IV parameter naming**: `Smax`/`SC50` → `Emax`/`EC50`
+  to match WNL convention (Models 53/54).
+- **Effect compartment**: `ke0` output label → `Ke0` (capital K per
+  WNL 6.4 p.385).
+- **Swing formula**: `(Cmax−Cmin)/Cmin` (ratio, NO `× 100`).
+  Also: Swing is **WNL 8.3-only** — 5.3 and 6.4 do not define it.
+- **MRT for IV infusion v5.3**: confirmed `AUMC/AUC − T_inf/2` (we
+  had hedged in the matrix; it does NOT differ from 6.4/8.3).
+- **AIC formula**: WNL uses `N·ln(WRSS) + 2·p` (not
+  `N·ln(WRSS/N) + 2·k` — same ranking but absolute values differed
+  by `−N·ln(N)`). Code aligned to WNL convention.
+- **BE Kenward-Roger reference removed**: WNL only ships Satterthwaite
+  df — KR mention deleted from docs.
+
+### Implementation gaps closed
+
+- SDTM **VS** (vital signs / body weight) and **LB** (laboratory /
+  creatinine) loaders implemented in `cdisc/sdtm.py`. `import_sdtm`
+  MCP tool now accepts `vs_path`/`lb_path`.
+- `export_adam` MCP tool now actually writes the ADaM ADPC dataset
+  alongside ADPP (previously returned `adpc_status="not_implemented_v2_0"`
+  while `build_adpc()` was already implemented).
+- `generate_report` MCP tool now invokes `report.plots.*` and embeds
+  per-subject concentration-time, Lambda_z regression, spaghetti, and
+  mean ± SD plots (previously emitted `plot_paths: []`).
+- `fit_pk_model` MCP wrapper now forwards `bounds` / `solver` /
+  `method` parameters (previously dropped).
+- `run_be` MCP wrapper now accepts an `endpoints: list[str]`
+  parameter and returns `be_results` list (previously single endpoint
+  only, despite the documented multi-endpoint shape).
+- All `impl_*` MCP wrappers now forward `user` / `audit_dir` —
+  this is what makes Part 11 controlled mode reachable from the
+  MCP client.
+- `AuditEntry.user` is now populated when callers pass `user=...`
+  to `new_entry()` (previously hardcoded `None`).
+- New agents: `agents/report-writer.md`, `agents/data-curator.md`
+  (referenced by `docs/01-architecture.md` but were missing).
+- `report/quarto.py` removed from documented formats (it does not
+  exist and would mislead users). `generate_report` now restricts
+  `format` to `"html" | "pdf"`.
+- `NCAConfig.dose_normalization=True` is now honored — produces
+  `Cmax_D`, `AUClast_D`, `AUCINF_D` rows. `weight_normalization="per_kg"`
+  emits an explicit `"not_implemented_per_kg"` warning (deferred to
+  v2.1). `c0_method="auto"` now correctly resolves to
+  `log_back_extrap`.
+- Warnings added for silent option mismatches: `bloq_custom` set
+  without `bloq_policy="custom"`; `lambda_z_manual` set without
+  `lambda_z_method="manual"`; failed partial AUC windows.
+
+### Changed — Documentation
+
+- Every `📋 TODO` marker removed and replaced with explicit manual
+  citations (WNL 5.3 p.NNN, WNL 6.4 §X.Y, WNL 8.3 §X.Y).
+- `docs/04-winnonlin-version-matrix.md` rewritten with verified
+  per-version values.
+- `docs/03-algorithms/*` 9 files cleaned of TODO markers, added
+  version-aware notes.
+- `docs/03-algorithms/README.md` now declares "every algorithm
+  manual-verified 2026-05".
+
+### Tests
+- **562 passing** (up from 536), mypy --strict clean, ruff clean.
+- New regression tests for version-aware Tmax inclusion in
+  `tests/test_lambda_z.py`.
+- Cross-version golden expected values regenerated by
+  `scripts/golden_regen.py` to reflect the new defaults; the
+  expected-differences table in `tests/golden/cross-version/` now
+  accurately marks Lambda_z-derived parameters as differing 5.3 vs
+  6.4/8.3 (because of the Tmax-inclusion behavior change).
+
+### Not changed
+- Public API signatures of `NCAConfig`, `calculate_nca`, MCP tool
+  names — backward compatible.
+- Audit chain crypto, e-signature, RBAC, WORM lock — unchanged.
+
 ## [2.0.1] - 2026-05-25
 
 ### Changed — Positioning clarity (no behavioural rollback)

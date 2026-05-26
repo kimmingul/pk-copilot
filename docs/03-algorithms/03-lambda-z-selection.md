@@ -129,12 +129,12 @@ class LambdaZResult:
 
 | 버전 | Best Fit | Adj R² tolerance | 기본 method |
 |---|---|---|---|
-| WinNonlin 5.3 | 알고리즘 동일 | 0.0001 | `best_fit` (📋 TODO 검증) |
+| WinNonlin 5.3 | 알고리즘 동일 | 0.0001 | `best_fit` (WNL 5.3 p.196 confirms Best Fit as default) |
 | WinNonlin 6.4 | 동일 | 0.0001 | `best_fit` |
 | WinNonlin 8.3 | 동일 | 0.0001 | `best_fit` |
 | **pk-copilot 기본** | `best_fit` | 0.0001 | `winnonlin_version` 따름 |
 
-> 📋 TODO: 매뉴얼별 tolerance 정확한 값 확인 (WinNonlin 백서 / Phoenix Help)
+> Adj R² tolerance of 0.0001 confirmed for all three versions (WNL 5.3 p.196; WNL 6.4 UG §7.4; WNL 8.3 UG §8.3). Lambda_z regression uses **post-Tmax** points only — points at or before Tmax are excluded even if their concentrations are declining (WNL 6.4 UG §7.4.1).
 
 ---
 

@@ -4,9 +4,17 @@ NLS / weighted-least-squares PK model fitting via lmfit.
 Supports closed-form (analytic) and ODE-based prediction, five weighting
 schemes, and additive / proportional / combined residual error models.
 
-AIC and BIC follow the WinNonlin convention:
-    AIC = N * ln(SS/N) + 2k
-    BIC = N * ln(SS/N) + k * ln(N)
+AIC and BIC follow the WinNonlin convention (PK model context):
+    AIC = N * ln(WRSS) + 2*P
+    SBC = N * ln(WRSS) + P * ln(N)
+
+where WRSS = weighted residual sum of squares, P = number of parameters,
+N = number of observations with positive weight.
+Ref: WNL 5.3 Glossary p.487; WNL 8.3 p.232 (PK model output section).
+
+NOTE: This differs from the standard MLE-based AIC = -2*ln(L) + 2*k by a
+constant offset of -N*ln(N). Relative model comparisons are unaffected; only
+absolute values differ. The _aic_bic() helper computes the WNL-exact values.
 
 Refs: docs/03-algorithms/08-compartmental-models.md §4–§6
 """
@@ -65,7 +73,8 @@ class ParamSpec:
 class FitDiagnostics:
     """Goodness-of-fit summary statistics.
 
-    AIC and BIC follow the WinNonlin (N·ln(SS/N) + k·penalty) convention.
+    AIC and BIC follow the WinNonlin (N·ln(WRSS) + k·penalty) convention.
+    Ref: WNL 5.3 Glossary p.487; WNL 8.3 p.232.
     """
 
     n_obs: int
@@ -210,16 +219,26 @@ def _aic_bic(
     n: int,
     k: int,
 ) -> tuple[float, float]:
-    """WinNonlin-convention AIC and BIC.
+    """WinNonlin-convention AIC and SBC (PK model context).
 
-    AIC = N * ln(SS/N) + 2k
-    BIC = N * ln(SS/N) + k * ln(N)
+    AIC = N * ln(WRSS) + 2*P
+    SBC = N * ln(WRSS) + P * ln(N)
+
+    where WRSS = weighted residual sum of squares, P = number of parameters,
+    N = number of observations with positive weight.
+
+    Source: WNL 5.3 Glossary p.487 "AIC = N log(WRSS) + 2P";
+            WNL 8.3 p.232 "AIC=N log(WRSS)+2P".
+
+    NOTE: differs from standard MLE-based AIC = -2*ln(L) + 2*k by
+    the constant offset -N*ln(N). Rankings are identical; absolute values
+    differ by that constant. The standard form is NOT used here.
     """
     if n <= 0 or rss <= 0.0:
         return float("nan"), float("nan")
-    log_ss_n = np.log(rss / n)
-    aic = n * log_ss_n + 2.0 * k
-    bic = n * log_ss_n + k * np.log(n)
+    log_wrss = np.log(rss)
+    aic = n * log_wrss + 2.0 * k
+    bic = n * log_wrss + k * np.log(n)
     return float(aic), float(bic)
 
 

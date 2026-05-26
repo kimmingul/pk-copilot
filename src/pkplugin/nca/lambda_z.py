@@ -197,12 +197,27 @@ def fit_lambda_z(
 
     # Collect excluded points (at or before tmax, or non-positive/non-finite post-tmax)
     excluded_points: list[_ExcludedPoint] = []
-    post_mask: NDArray[np.bool_] = t_all > tmax
+
+    # Tmax inclusion is version-aware per WinNonlin manual differences:
+    #   - WNL 5.3 NCA manual ("Points prior to Cmax"): the Cmax data point itself
+    #     MAY participate in the Lambda_z candidate windows.
+    #   - WNL 6.4 / 8.3 ("Points prior to Cmax, and the point at Cmax for
+    #     non-bolus models"): the Cmax data point is explicitly EXCLUDED.
+    # 5.3 → t >= tmax (inclusive)
+    # 6.4 / 8.3 / compat-latest → t > tmax (strict, default)
+    if str(winnonlin_version) == "5.3":
+        post_mask: NDArray[np.bool_] = t_all >= tmax
+        _tmax_exclusion_reason = "before_tmax"  # 5.3 keeps the Cmax point
+    else:
+        post_mask = t_all > tmax
+        _tmax_exclusion_reason = "pre_tmax"
     # B8: also exclude non-positive or non-finite concentrations post-tmax
     positive_finite_mask: NDArray[np.bool_] = np.isfinite(c_all) & (c_all > 0)
     for i in range(len(t_all)):
         if not post_mask[i]:
-            excluded_points.append({"index": i, "time": float(t_all[i]), "reason": "pre_tmax"})
+            excluded_points.append(
+                {"index": i, "time": float(t_all[i]), "reason": _tmax_exclusion_reason}
+            )
         elif not positive_finite_mask[i]:
             excluded_points.append(
                 {

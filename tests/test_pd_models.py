@@ -134,8 +134,8 @@ def test_effect_compartment_lag() -> None:
     times = np.linspace(0.0, 20.0, 200)
     conc = C0 * np.exp(-k_pk * times)
 
-    # Slow ke0 → strong lag
-    params = {"E0": 0.0, "Emax": 1.0, "EC50": 2.0, "ke0": 0.1}
+    # Slow Ke0 → strong lag (WNL convention: Ke0 capital K, WNL 6.4 p.385)
+    params = {"E0": 0.0, "Emax": 1.0, "EC50": 2.0, "Ke0": 0.1}
     effects = predict_pd("effect_compartment", params, conc, times)
 
     # Concentration peaks at t=0; effect should peak later
@@ -223,7 +223,8 @@ def test_idr_ii_stimulation_direction() -> None:
 def test_idr_iii_stimulation_direction() -> None:
     """IDR-III (stimulate production): high C should raise R."""
     kin, kout = 8.0, 0.4
-    params = {"kin": kin, "kout": kout, "Smax": 3.0, "SC50": 2.0}
+    # WNL Model 53 params: Emax, EC50 (not Smax/SC50). Ref: WNL 6.4 p.238, 8.3 p.223.
+    params = {"kin": kin, "kout": kout, "Emax": 3.0, "EC50": 2.0}
     baseline = kin / kout
 
     times = np.linspace(0.0, 40.0, 120)
@@ -243,7 +244,8 @@ def test_idr_iii_stimulation_direction() -> None:
 def test_idr_iv_stimulation_direction() -> None:
     """IDR-IV (stimulate loss): high C should lower R."""
     kin, kout = 8.0, 0.4
-    params = {"kin": kin, "kout": kout, "Smax": 2.0, "SC50": 1.0}
+    # WNL Model 54 params: Emax, EC50 (not Smax/SC50). Ref: WNL 6.4 p.238, 8.3 p.223.
+    params = {"kin": kin, "kout": kout, "Emax": 2.0, "EC50": 1.0}
     baseline = kin / kout
 
     times = np.linspace(0.0, 40.0, 120)

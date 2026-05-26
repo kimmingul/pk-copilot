@@ -26,7 +26,9 @@ from pkplugin.cdisc.sdtm import (
     compute_elapsed_time_hours,
     load_sdtm_dm,
     load_sdtm_ex,
+    load_sdtm_lb,
     load_sdtm_pc,
+    load_sdtm_vs,
     map_exroute_to_canonical,
     normalise_pc_times,
 )
@@ -39,6 +41,8 @@ GOLDEN = Path(__file__).parent / "golden" / "cdisc"
 PC_CSV = GOLDEN / "pc.csv"
 EX_CSV = GOLDEN / "ex.csv"
 DM_CSV = GOLDEN / "dm.csv"
+VS_CSV = GOLDEN / "vs.csv"
+LB_CSV = GOLDEN / "lb.csv"
 
 
 # ---------------------------------------------------------------------------
@@ -264,3 +268,103 @@ class TestNormalisePcTimes:
         has_pcdtc = result["pcdtc"].astype(str).str.len() > 0
         for i, row in result[has_pcdtc].iterrows():
             assert row["time"] is not None or pd.isna(row["time"]) is False or True
+
+
+# ---------------------------------------------------------------------------
+# VS domain loading (G1)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadSdtmVs:
+    def test_load_golden_vs(self) -> None:
+        df = load_sdtm_vs(VS_CSV)
+        assert not df.empty
+        assert "subject_id" in df.columns
+        assert "weight_kg" in df.columns
+        assert "weight_dtc" in df.columns
+
+    def test_golden_vs_two_subjects(self) -> None:
+        df = load_sdtm_vs(VS_CSV)
+        assert len(df) == 2
+
+    def test_weight_values_numeric(self) -> None:
+        df = load_sdtm_vs(VS_CSV)
+        weights = df["weight_kg"].dropna().tolist()
+        assert len(weights) == 2
+        assert all(isinstance(w, float) for w in weights)
+        assert 72.5 in weights
+        assert 58.3 in weights
+
+    def test_missing_required_cols_raises(self, tmp_path: Path) -> None:
+        bad_csv = tmp_path / "vs_bad.csv"
+        bad_csv.write_text("STUDYID,USUBJID\nSTUDY01,STUDY01-001-001\n")
+        with pytest.raises(ValueError, match="missing required columns"):
+            load_sdtm_vs(bad_csv)
+
+    def test_file_not_found_raises(self) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_sdtm_vs("/nonexistent/vs.csv")
+
+    def test_weight_filter_bwt(self, tmp_path: Path) -> None:
+        """BWT testcd is also filtered by default."""
+        bwt_csv = tmp_path / "vs_bwt.csv"
+        bwt_csv.write_text(
+            "STUDYID,DOMAIN,USUBJID,VSSEQ,VSTESTCD,VSTEST,VSSTRESN,VSSTRESU,VSDTC\n"
+            "STUDY01,VS,S01,1,BWT,Body Weight,70.0,kg,2024-03-01T08:00:00\n"
+            "STUDY01,VS,S01,2,PULSE,Pulse Rate,72,bpm,2024-03-01T08:00:00\n"
+        )
+        df = load_sdtm_vs(bwt_csv)
+        assert len(df) == 1
+        assert float(df.iloc[0]["weight_kg"]) == pytest.approx(70.0)
+
+
+# ---------------------------------------------------------------------------
+# LB domain loading (G1)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadSdtmLb:
+    def test_load_golden_lb(self) -> None:
+        df = load_sdtm_lb(LB_CSV)
+        assert not df.empty
+        assert "subject_id" in df.columns
+        assert "crcl" in df.columns
+        assert "egfr" in df.columns
+        assert "creatinine" in df.columns
+
+    def test_golden_lb_two_subjects(self) -> None:
+        df = load_sdtm_lb(LB_CSV)
+        assert len(df) == 2
+
+    def test_creatinine_values(self) -> None:
+        df = load_sdtm_lb(LB_CSV)
+        subj1 = df[df["subject_id"] == "STUDY01-001-001"].iloc[0]
+        assert subj1["creatinine"] == pytest.approx(0.9)
+        assert subj1["crcl"] == pytest.approx(98.5)
+
+    def test_egfr_value(self) -> None:
+        df = load_sdtm_lb(LB_CSV)
+        subj2 = df[df["subject_id"] == "STUDY01-002-001"].iloc[0]
+        assert subj2["egfr"] == pytest.approx(85.2)
+
+    def test_missing_required_cols_raises(self, tmp_path: Path) -> None:
+        bad_csv = tmp_path / "lb_bad.csv"
+        bad_csv.write_text("STUDYID,USUBJID\nSTUDY01,STUDY01-001-001\n")
+        with pytest.raises(ValueError, match="missing required columns"):
+            load_sdtm_lb(bad_csv)
+
+    def test_file_not_found_raises(self) -> None:
+        with pytest.raises(FileNotFoundError):
+            load_sdtm_lb("/nonexistent/lb.csv")
+
+    def test_filters_non_renal_testcds(self, tmp_path: Path) -> None:
+        """Non-renal LBTESTCD values are filtered out."""
+        lb_csv = tmp_path / "lb_mixed.csv"
+        lb_csv.write_text(
+            "STUDYID,DOMAIN,USUBJID,LBSEQ,LBTESTCD,LBTEST,LBSTRESN,LBSTRESU,LBDTC\n"
+            "STUDY01,LB,S01,1,CREAT,Creatinine,1.0,mg/dL,2024-03-01\n"
+            "STUDY01,LB,S01,2,ALT,Alanine Aminotransferase,25,U/L,2024-03-01\n"
+        )
+        df = load_sdtm_lb(lb_csv)
+        assert len(df) == 1
+        assert float(df.iloc[0]["creatinine"]) == pytest.approx(1.0)

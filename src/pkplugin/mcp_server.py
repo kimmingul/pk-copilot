@@ -305,6 +305,7 @@ def impl_run_nca(
         winnonlin_compat=nca_cfg.winnonlin_version,
         execution_mode=mode,
         llm_orchestrated=llm_orch,
+        user=user,
     )
     run_id = entry.run_id
 
@@ -455,7 +456,7 @@ def _render_nca_script(
 
 def impl_run_be(
     parameter_dataset_path: str,
-    endpoint: str = "AUC0_t",
+    endpoints: list[str] | None = None,
     design: str = "crossover_2x2",
     test_label: str | None = None,
     reference_label: str | None = None,
@@ -468,11 +469,19 @@ def impl_run_be(
     """Run bioequivalence analysis + emit audit.
 
     Loads a subject-level parameter table (CSV) and computes Average
-    Bioequivalence statistics.  Writes ``be_result.csv`` and ``audit.json``
-    to the run directory.
+    Bioequivalence statistics for each requested endpoint.  Writes
+    ``be_result.csv`` and ``audit.json`` to the run directory.
+
+    Args:
+        parameter_dataset_path: Path to CSV with subject-level PK parameters.
+        endpoints: List of endpoint column names to analyse.  Defaults to
+            ``["AUC0_t", "AUC0_inf", "Cmax"]``.
 
     Refs: docs/06-mcp-server.md §3
     """
+    if endpoints is None:
+        endpoints = ["AUC0_t", "AUC0_inf", "Cmax"]
+
     mode = classify_execution_mode(user=user)
     llm_orch = _detect_llm_orchestrated()
 
@@ -487,60 +496,75 @@ def impl_run_be(
     except Exception as exc:
         return {"status": "error", "error": f"Failed to read CSV: {exc}"}
 
-    # Validate required columns
-    required_base = {"subject_id", "treatment", endpoint}
-    if design == "crossover_2x2":
-        required_base |= {"period", "sequence"}
-    missing = required_base - set(df.columns)
-    if missing:
-        return {
-            "status": "error",
-            "error": f"Missing required columns: {sorted(missing)}",
-        }
-
     be_window: tuple[float, float] = (be_window_low, be_window_high)
 
-    try:
-        result = run_bioequivalence(
-            parameters=df,
-            endpoint=endpoint,
-            design=design,  # type: ignore[arg-type]
-            test_label=test_label,
-            reference_label=reference_label,
-            be_window=be_window,
-            winnonlin_version=winnonlin_version,
-        )
-    except Exception as exc:
-        return {"status": "error", "error": str(exc)}
+    # Run BE for each requested endpoint (skip those not present in the CSV)
+    be_results: list[dict[str, Any]] = []
+    all_warnings: list[str] = []
 
-    be_result_dict: dict[str, Any] = {
-        "design": result.design,
-        "endpoint": result.endpoint,
-        "transformation": result.transformation,
-        "n_subjects": result.n_subjects,
-        "n_completers": result.n_completers,
-        "test_label": result.test_label,
-        "reference_label": result.reference_label,
-        "ls_mean_test": _serialise_for_json(result.ls_mean_test),
-        "ls_mean_reference": _serialise_for_json(result.ls_mean_reference),
-        "difference_log": _serialise_for_json(result.difference_log),
-        "gmr_pct": _serialise_for_json(result.gmr_pct),
-        "ci_90_low_pct": _serialise_for_json(result.ci_90_low_pct),
-        "ci_90_high_pct": _serialise_for_json(result.ci_90_high_pct),
-        "be_window": list(result.be_window),
-        "be_demonstrated": result.be_demonstrated,
-        "within_subject_cv_pct": _serialise_for_json(result.within_subject_cv_pct),
-        "df": _serialise_for_json(result.df),
-        "anova_table": _serialise_for_json(result.anova_table),
-        "method": result.method,
-        "warnings": result.warnings,
-    }
+    for endpoint in endpoints:
+        # Validate required columns for this endpoint
+        required_base = {"subject_id", "treatment", endpoint}
+        if design == "crossover_2x2":
+            required_base |= {"period", "sequence"}
+        missing_cols = required_base - set(df.columns)
+        if missing_cols:
+            be_results.append(
+                {
+                    "endpoint": endpoint,
+                    "status": "skipped",
+                    "reason": f"Missing columns: {sorted(missing_cols)}",
+                }
+            )
+            continue
+
+        try:
+            result = run_bioequivalence(
+                parameters=df,
+                endpoint=endpoint,
+                design=design,  # type: ignore[arg-type]
+                test_label=test_label,
+                reference_label=reference_label,
+                be_window=be_window,
+                winnonlin_version=winnonlin_version,
+            )
+        except Exception as exc:
+            be_results.append({"endpoint": endpoint, "status": "error", "error": str(exc)})
+            continue
+
+        be_result_dict: dict[str, Any] = {
+            "endpoint": result.endpoint,
+            "status": "ok",
+            "design": result.design,
+            "transformation": result.transformation,
+            "n_subjects": result.n_subjects,
+            "n_completers": result.n_completers,
+            "test_label": result.test_label,
+            "reference_label": result.reference_label,
+            "ls_mean_test": _serialise_for_json(result.ls_mean_test),
+            "ls_mean_reference": _serialise_for_json(result.ls_mean_reference),
+            "difference_log": _serialise_for_json(result.difference_log),
+            "gmr_pct": _serialise_for_json(result.gmr_pct),
+            "ci_90_low_pct": _serialise_for_json(result.ci_90_low_pct),
+            "ci_90_high_pct": _serialise_for_json(result.ci_90_high_pct),
+            "be_window": list(result.be_window),
+            "be_demonstrated": result.be_demonstrated,
+            "within_subject_cv_pct": _serialise_for_json(result.within_subject_cv_pct),
+            "df": _serialise_for_json(result.df),
+            "anova_table": _serialise_for_json(result.anova_table),
+            "method": result.method,
+            "warnings": result.warnings,
+        }
+        be_results.append(be_result_dict)
+        for w in result.warnings:
+            if w not in all_warnings:
+                all_warnings.append(w)
 
     # Build audit entry
     entry: AuditEntry = new_entry(
         tool="run_be",
         config={
-            "endpoint": endpoint,
+            "endpoints": endpoints,
             "design": design,
             "test_label": test_label,
             "reference_label": reference_label,
@@ -552,6 +576,7 @@ def impl_run_be(
         winnonlin_compat=winnonlin_version,
         execution_mode=mode,
         llm_orchestrated=llm_orch,
+        user=user,
     )
     run_id = entry.run_id
 
@@ -559,31 +584,36 @@ def impl_run_be(
     run_dir = audit_base / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Write single-row summary CSV
+    # Write summary CSV (one row per endpoint)
     be_csv_path = run_dir / "be_result.csv"
-    be_summary_row: dict[str, Any] = {
-        "run_id": run_id,
-        "design": result.design,
-        "endpoint": result.endpoint,
-        "transformation": result.transformation,
-        "n_subjects": result.n_subjects,
-        "n_completers": result.n_completers,
-        "test_label": result.test_label,
-        "reference_label": result.reference_label,
-        "gmr_pct": result.gmr_pct,
-        "ci_90_low_pct": result.ci_90_low_pct,
-        "ci_90_high_pct": result.ci_90_high_pct,
-        "be_window_low": result.be_window[0],
-        "be_window_high": result.be_window[1],
-        "be_demonstrated": result.be_demonstrated,
-        "within_subject_cv_pct": result.within_subject_cv_pct,
-        "df": result.df,
-        "method": result.method,
-    }
-    pd.DataFrame([be_summary_row]).to_csv(be_csv_path, index=False)
+    summary_rows: list[dict[str, Any]] = []
+    for r in be_results:
+        if r.get("status") == "ok":
+            summary_rows.append(
+                {
+                    "run_id": run_id,
+                    "endpoint": r["endpoint"],
+                    "design": r.get("design", design),
+                    "transformation": r.get("transformation"),
+                    "n_subjects": r.get("n_subjects"),
+                    "n_completers": r.get("n_completers"),
+                    "test_label": r.get("test_label"),
+                    "reference_label": r.get("reference_label"),
+                    "gmr_pct": r.get("gmr_pct"),
+                    "ci_90_low_pct": r.get("ci_90_low_pct"),
+                    "ci_90_high_pct": r.get("ci_90_high_pct"),
+                    "be_window_low": be_window_low,
+                    "be_window_high": be_window_high,
+                    "be_demonstrated": r.get("be_demonstrated"),
+                    "within_subject_cv_pct": r.get("within_subject_cv_pct"),
+                    "df": r.get("df"),
+                    "method": r.get("method"),
+                }
+            )
+    pd.DataFrame(summary_rows).to_csv(be_csv_path, index=False)
 
-    entry.results = be_result_dict
-    entry.warnings = result.warnings
+    entry.results = {"be_results": be_results}
+    entry.warnings = all_warnings
     entry.artifacts = [
         {
             "name": "be_result.csv",
@@ -593,6 +623,12 @@ def impl_run_be(
     ]
     audit_json_path = entry.write(audit_base)
 
+    # Determine overall BE status across endpoints
+    successful = [r for r in be_results if r.get("status") == "ok"]
+    all_be_demonstrated = (
+        all(r.get("be_demonstrated", False) for r in successful) if successful else None
+    )
+
     # Part 11 chain emission
     _emit_chain_entry(
         run_dir=run_dir,
@@ -600,7 +636,7 @@ def impl_run_be(
         user=user,
         reason="BE analysis run",
         run_id=run_id,
-        after={"run_state": "draft", "be_demonstrated": result.be_demonstrated},
+        after={"run_state": "draft", "n_endpoints": len(successful)},
         execution_mode=mode,
         llm_orchestrated=llm_orch,
     )
@@ -609,8 +645,9 @@ def impl_run_be(
         "status": "ok",
         "run_id": run_id,
         "audit_path": str(audit_json_path),
-        "be_result": be_result_dict,
-        "warnings": result.warnings,
+        "be_results": be_results,
+        "be_demonstrated": all_be_demonstrated,
+        "warnings": all_warnings,
         "execution_mode": mode,
     }
 
@@ -951,6 +988,9 @@ def impl_fit_pk_model(
     winnonlin_version: str = "6.4",
     audit_dir: str | None = None,
     user: dict[str, str] | None = None,
+    bounds: dict[str, list[float]] | None = None,
+    solver: str = "leastsq",
+    method: str = "leastsq",
 ) -> dict[str, Any]:
     """Fit a PK compartmental model and emit audit + write fit artifacts.
 
@@ -1065,18 +1105,38 @@ def impl_fit_pk_model(
             ),
         }
 
+    # --- Build param specs (with optional bounds) ---
+    from pkplugin.comp.fitting import ParamSpec as _ParamSpec
+
+    if bounds is not None:
+        param_specs: dict[str, float] | list[_ParamSpec] = [
+            _ParamSpec(
+                name=k,
+                initial=float(initial_params.get(k, 0.0)),
+                lower=float(bounds[k][0]) if len(bounds[k]) > 0 else 0.0,
+                upper=float(bounds[k][1]) if len(bounds[k]) > 1 else float("inf"),
+            )
+            for k in initial_params
+        ]
+    else:
+        param_specs = initial_params
+
+    # solver param maps to method in lmfit; both names are supported
+    effective_method = method if method != "leastsq" else solver
+
     # --- Run fit ---
     try:
         fit: FitResult = _fit_pk_model(
             times=times_arr,
             observed=conc_arr,
             model_name=model_name,
-            initial_params=initial_params,
+            initial_params=param_specs,
             dose=dose,
             dosing_events=ev_list,
             weighting=weighting,  # type: ignore[arg-type]
             residual_error=residual_error,  # type: ignore[arg-type]
             use_ode=use_ode,
+            method=effective_method,
         )
     except Exception as exc:
         return {"status": "error", "error": str(exc)}
@@ -1122,11 +1182,15 @@ def impl_fit_pk_model(
             "use_ode": use_ode,
             "winnonlin_version": winnonlin_version,
             "winnonlin_model_id": spec.winnonlin_model_id if spec is not None else None,
+            "bounds": bounds,
+            "solver": solver,
+            "method": method,
         },
         input_paths=input_paths,
         winnonlin_compat=winnonlin_version,
         execution_mode=mode,
         llm_orchestrated=llm_orch,
+        user=user,
     )
     run_id = entry.run_id
 
@@ -1458,6 +1522,7 @@ def impl_fit_pd_model(
         winnonlin_compat=winnonlin_version,
         execution_mode=exec_mode,
         llm_orchestrated=llm_orch,
+        user=user,
     )
     run_id = entry.run_id
 
@@ -1597,9 +1662,124 @@ def impl_generate_report(
                     "error": f"Failed to re-run NCA: {nca_result_dict.get('error')}",
                 }
 
-            # For HTML report, build from the CSV directly via render_html_report
+            # Generate plots from concentration data
+            import numpy as np
+
             from pkplugin.report.html import render_html_report
             from pkplugin.report.pdf import render_pdf_report
+            from pkplugin.report.plots import (
+                plot_concentration_time,
+                plot_lambda_z_regression,
+                plot_mean_sd,
+                plot_spaghetti,
+            )
+
+            plots_dir = run_dir / "plots"
+            plots_dir.mkdir(parents=True, exist_ok=True)
+            plot_paths: list[str] = []
+
+            # Load concentration data to generate per-subject plots
+            _conc_df: pd.DataFrame | None = None
+            _ds_path = Path(dataset_path)
+            if _ds_path.is_file():
+                try:
+                    from pkplugin.ingest import load_dataset
+
+                    _conc_df, _ = load_dataset(_ds_path)
+                except Exception:
+                    pass
+
+            if _conc_df is not None and not _conc_df.empty:
+                subjects_in_df: list[str] = (
+                    list(_conc_df["subject_id"].unique())
+                    if "subject_id" in _conc_df.columns
+                    else []
+                )
+
+                for sid in subjects_in_df:
+                    sub = (
+                        _conc_df[_conc_df["subject_id"] == sid]
+                        .sort_values("time")
+                        .dropna(subset=["time", "concentration"])
+                    )
+                    if sub.empty:
+                        continue
+                    t_arr = np.asarray(sub["time"].tolist(), dtype=np.float64)
+                    c_arr = np.asarray(sub["concentration"].tolist(), dtype=np.float64)
+                    sid_str = str(sid)
+
+                    # Linear concentration-time plot
+                    conc_path = plots_dir / f"conc_{sid_str}.png"
+                    try:
+                        plot_concentration_time(
+                            t_arr, c_arr, conc_path, log_scale=False, subject_id=sid_str
+                        )
+                        plot_paths.append(str(conc_path))
+                    except Exception:
+                        pass
+
+                    # Log-scale concentration-time plot
+                    conc_log_path = plots_dir / f"conc_log_{sid_str}.png"
+                    try:
+                        plot_concentration_time(
+                            t_arr, c_arr, conc_log_path, log_scale=True, subject_id=sid_str
+                        )
+                        plot_paths.append(str(conc_log_path))
+                    except Exception:
+                        pass
+
+                    # Lambda_z regression plot (use all points as selected for simplicity)
+                    lz_path = plots_dir / f"lambda_z_{sid_str}.png"
+                    try:
+                        # Get lambda_z from audit results of the re-run NCA
+                        # Find lambda_z from the re-run result parameter summary
+                        lz_val: float | None = None
+                        for psum in nca_result_dict.get("parameter_summary", []):
+                            if str(psum.get("subject_id")) == sid_str:
+                                lz_val = psum.get("HL_Lambda_z")
+                                break
+                        # Estimate lambda_z index range as last 3 positive points
+                        pos_idx = [i for i, v in enumerate(c_arr) if v > 0]
+                        sel_idx = pos_idx[-3:] if len(pos_idx) >= 3 else pos_idx
+                        if sel_idx and lz_val is not None and lz_val > 0:
+                            import math
+
+                            lambda_z_rate = math.log(2) / lz_val
+                            # Estimate intercept from regression over selected points
+                            sel_t = t_arr[np.array(sel_idx)]
+                            sel_c = c_arr[np.array(sel_idx)]
+                            log_c = np.log(sel_c[sel_c > 0])
+                            log_t = sel_t[sel_c > 0]
+                            if len(log_c) >= 2:
+                                intercept_val = float(np.mean(log_c + lambda_z_rate * log_t))
+                                plot_lambda_z_regression(
+                                    t_arr,
+                                    c_arr,
+                                    sel_idx,
+                                    lambda_z_rate,
+                                    intercept_val,
+                                    lz_path,
+                                    subject_id=sid_str,
+                                )
+                                plot_paths.append(str(lz_path))
+                    except Exception:
+                        pass
+
+                # Multi-subject spaghetti and mean/SD plots
+                if len(subjects_in_df) > 1:
+                    spag_path = plots_dir / "spaghetti.png"
+                    try:
+                        plot_spaghetti(_conc_df, spag_path)
+                        plot_paths.append(str(spag_path))
+                    except Exception:
+                        pass
+
+                    mean_sd_path = plots_dir / "mean_sd.png"
+                    try:
+                        plot_mean_sd(_conc_df, mean_sd_path)
+                        plot_paths.append(str(mean_sd_path))
+                    except Exception:
+                        pass
 
             df = pd.read_csv(params_csv)
             # Build param table HTML inline
@@ -1619,7 +1799,7 @@ def impl_generate_report(
                 {
                     "heading": "NCA Parameter Table",
                     "content_html": param_table_html,
-                    "plot_paths": [],
+                    "plot_paths": plot_paths,
                 }
             ]
             metadata_report: dict[str, str] = {
@@ -1941,13 +2121,22 @@ def impl_import_sdtm(
     analyte: str | None = None,
     matrix: str | None = None,
     audit_dir: str | None = None,
+    vs_path: str | None = None,
+    lb_path: str | None = None,
 ) -> dict[str, Any]:
-    """Import SDTM PC + EX + optional DM → canonical CSVs + audit.
+    """Import SDTM PC + EX + optional DM/VS/LB → canonical CSVs + audit.
 
     Returns a dict with keys: status, pc_csv, ex_csv, dm_csv (optional),
-    warnings, n_subjects, n_pc_rows.
+    vs_csv (optional), lb_csv (optional), warnings, n_subjects, n_pc_rows.
     """
-    from pkplugin.cdisc.sdtm import load_sdtm_dm, load_sdtm_ex, load_sdtm_pc, normalise_pc_times
+    from pkplugin.cdisc.sdtm import (
+        load_sdtm_dm,
+        load_sdtm_ex,
+        load_sdtm_lb,
+        load_sdtm_pc,
+        load_sdtm_vs,
+        normalise_pc_times,
+    )
 
     pc_file = Path(pc_path).resolve()
     ex_file = Path(ex_path).resolve()
@@ -2003,6 +2192,34 @@ def impl_import_sdtm(
             except Exception as exc:
                 result["dm_warning"] = f"Failed to load DM: {exc}"
 
+    if vs_path is not None:
+        vs_file = Path(vs_path).resolve()
+        if not vs_file.is_file():
+            result["vs_warning"] = f"VS file not found: {vs_file}"
+        else:
+            try:
+                vs_df = load_sdtm_vs(vs_file)
+                vs_csv = run_dir / "sdtm_vs_canonical.csv"
+                vs_df.to_csv(vs_csv, index=False)
+                result["vs_csv"] = str(vs_csv)
+                result["n_subjects_vs"] = len(vs_df)
+            except Exception as exc:
+                result["vs_warning"] = f"Failed to load VS: {exc}"
+
+    if lb_path is not None:
+        lb_file = Path(lb_path).resolve()
+        if not lb_file.is_file():
+            result["lb_warning"] = f"LB file not found: {lb_file}"
+        else:
+            try:
+                lb_df = load_sdtm_lb(lb_file)
+                lb_csv = run_dir / "sdtm_lb_canonical.csv"
+                lb_df.to_csv(lb_csv, index=False)
+                result["lb_csv"] = str(lb_csv)
+                result["n_subjects_lb"] = len(lb_df)
+            except Exception as exc:
+                result["lb_warning"] = f"Failed to load LB: {exc}"
+
     return result
 
 
@@ -2016,9 +2233,9 @@ def impl_export_adam(
 
     Loads the NCA parameters.csv from the run directory, reconstructs
     ADPP from saved parameter rows, and builds ADPC from the concentration
-    file if present.
+    file if present (sdtm_pc_canonical.csv in the run directory).
     """
-    from pkplugin.cdisc.adam import build_adpp, write_adam_dataset
+    from pkplugin.cdisc.adam import build_adpc, build_adpp, write_adam_dataset
     from pkplugin.cdisc.define_xml import generate_define_xml
     from pkplugin.cdisc.validate import validate_adpp
 
@@ -2110,12 +2327,53 @@ def impl_export_adam(
         "n_adpp_rows": len(adpp_df),
         "validation_issues": validation_issues,
         "n_validation_errors": n_errors,
-        # M3: ADPC export is deferred — be explicit rather than silently skipping
-        "adpc_status": "not_implemented_v2_0",
-        "adpc_note": (
-            "ADaM ADPC export deferred to v2.1; impl_export_adam currently writes ADPP only."
-        ),
     }
+
+    # Build ADPC from concentration CSV if available in the run directory.
+    # The SDTM import step writes sdtm_pc_canonical.csv; NCA runs may also
+    # have an ingest-level CSV recorded in audit.json.
+    _pc_csv_candidates = [
+        run_dir / "sdtm_pc_canonical.csv",
+    ]
+    # Also check audit.json for the original input dataset path
+    _audit_json = run_dir / "audit.json"
+    if _audit_json.is_file():
+        try:
+            import json as _json
+
+            _audit_data = _json.loads(_audit_json.read_text())
+            for _inp in _audit_data.get("input_files", []):
+                _p = Path(_inp.get("path", ""))
+                if _p.suffix.lower() == ".csv" and _p.is_file():
+                    _pc_csv_candidates.append(_p)
+                    break
+        except Exception:
+            pass
+
+    adpc_built = False
+    for _pc_candidate in _pc_csv_candidates:
+        if _pc_candidate.is_file():
+            try:
+                conc_df = pd.read_csv(_pc_candidate)
+                # Map columns if needed (canonical sdtm_pc has subject_id, time, concentration, etc.)
+                # build_adpc expects canonical pk-copilot long-format columns
+                adpc_df = build_adpc(conc_df, dm_df=None, study_id=study_id)
+                adpc_path = write_adam_dataset(adpc_df, out_dir / "adpc.csv")
+                result["adpc_path"] = str(adpc_path)
+                result["n_adpc_rows"] = len(adpc_df)
+                result["adpc_status"] = "ok"
+                adpc_built = True
+                break
+            except Exception as _exc:
+                result["adpc_warning"] = f"ADPC build failed: {_exc}"
+                break
+
+    if not adpc_built and "adpc_warning" not in result:
+        result["adpc_status"] = "no_concentration_data"
+        result["adpc_note"] = (
+            "No concentration CSV found in run directory. "
+            "Run import_sdtm first to produce sdtm_pc_canonical.csv."
+        )
 
     # Collect PARAMCDs used
     paramcds_used: list[str] = []
@@ -2124,9 +2382,12 @@ def impl_export_adam(
 
     if include_define_xml:
         try:
+            adam_domains = ["ADPP"]
+            if adpc_built:
+                adam_domains = ["ADPC", "ADPP"]
             define_path = generate_define_xml(
                 study_id=study_id,
-                domains=["ADPP"],
+                domains=adam_domains,
                 paramcds_used=paramcds_used,
                 output_path=out_dir / "define.xml",
             )
@@ -2558,14 +2819,16 @@ def _build_mcp() -> Any:
         dose_path: str | None = None,
         subjects: list[str] | None = None,
         analytes: list[str] | None = None,
+        audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run NCA analysis + emit audit + reproducible script."""
-        return impl_run_nca(dataset_path, config, dose_path, subjects, analytes)
+        return impl_run_nca(dataset_path, config, dose_path, subjects, analytes, audit_dir, user)
 
     @mcp.tool
     def run_be(
         parameter_dataset_path: str,
-        endpoint: str = "AUC0_t",
+        endpoints: list[str] | None = None,
         design: str = "crossover_2x2",
         test_label: str | None = None,
         reference_label: str | None = None,
@@ -2573,11 +2836,12 @@ def _build_mcp() -> Any:
         be_window_high: float = 125.0,
         winnonlin_version: str = "6.4",
         audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Run bioequivalence analysis + emit audit."""
         return impl_run_be(
             parameter_dataset_path,
-            endpoint,
+            endpoints,
             design,
             test_label,
             reference_label,
@@ -2585,6 +2849,7 @@ def _build_mcp() -> Any:
             be_window_high,
             winnonlin_version,
             audit_dir,
+            user,
         )
 
     @mcp.tool
@@ -2644,6 +2909,10 @@ def _build_mcp() -> Any:
         use_ode: bool = False,
         winnonlin_version: str = "6.4",
         audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
+        bounds: dict[str, list[float]] | None = None,
+        solver: str = "leastsq",
+        method: str = "leastsq",
     ) -> dict[str, Any]:
         """Fit a PK compartmental model + emit audit + write fit artifacts."""
         return impl_fit_pk_model(
@@ -2657,6 +2926,10 @@ def _build_mcp() -> Any:
             use_ode,
             winnonlin_version,
             audit_dir,
+            user,
+            bounds,
+            solver,
+            method,
         )
 
     @mcp.tool
@@ -2683,6 +2956,7 @@ def _build_mcp() -> Any:
         weighting: str = "uniform",
         winnonlin_version: str = "6.4",
         audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Fit a PD model to effect-time data + emit audit."""
         return impl_fit_pd_model(
@@ -2693,6 +2967,7 @@ def _build_mcp() -> Any:
             weighting,
             winnonlin_version,
             audit_dir,
+            user,
         )
 
     @mcp.tool
@@ -2729,9 +3004,13 @@ def _build_mcp() -> Any:
         analyte: str | None = None,
         matrix: str | None = None,
         audit_dir: str | None = None,
+        vs_path: str | None = None,
+        lb_path: str | None = None,
     ) -> dict[str, Any]:
-        """Import SDTM PC + EX + optional DM domains → canonical CSVs + audit."""
-        return impl_import_sdtm(pc_path, ex_path, dm_path, analyte, matrix, audit_dir)
+        """Import SDTM PC + EX + optional DM/VS/LB domains → canonical CSVs + audit."""
+        return impl_import_sdtm(
+            pc_path, ex_path, dm_path, analyte, matrix, audit_dir, vs_path, lb_path
+        )
 
     @mcp.tool
     def export_adam(
@@ -2760,6 +3039,7 @@ def _build_mcp() -> Any:
         private_key_path: str,
         passphrase: str | None = None,
         audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Sign a run bundle with Ed25519 key (§11.50/§11.70/§11.200)."""
         return impl_sign_record(
@@ -2770,6 +3050,7 @@ def _build_mcp() -> Any:
             private_key_path,
             passphrase,
             audit_dir,
+            user,
         )
 
     @mcp.tool
@@ -2779,9 +3060,10 @@ def _build_mcp() -> Any:
         lock_reason: str,
         require_signatures: list[str] | None = None,
         audit_dir: str | None = None,
+        user: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Finalize a run bundle: verify signatures, set read-only (§11.10(c))."""
-        return impl_lock_run(run_id, locked_by, lock_reason, require_signatures, audit_dir)
+        return impl_lock_run(run_id, locked_by, lock_reason, require_signatures, audit_dir, user)
 
     @mcp.tool
     def verify_audit_chain(

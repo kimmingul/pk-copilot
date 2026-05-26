@@ -113,7 +113,7 @@ PARAMCD_REGISTRY: dict[str, ParamCodeEntry] = {
         "LAMZNPT",
         "Number of Points for Lambda z",
         "",
-        "No_points_lambda_z",
+        "No_points_Lambda_z",
     ),
     "R2": ParamCodeEntry(
         "R2",
@@ -159,9 +159,9 @@ PARAMCD_REGISTRY: dict[str, ParamCodeEntry] = {
     ),
     "VSS": ParamCodeEntry(
         "VSS",
-        "Volume of Distribution at Steady State",
+        "Volume of Distribution at Steady State (observed)",
         "L",
-        "Vss",
+        "Vss_obs",
     ),
 }
 

@@ -17,7 +17,7 @@ See docs/10-21cfr-part11.md (§16 disclaimer, §17 execution modes),
 docs/13-compliance-matrix.md, and docs/14-llm-boundary-disclosure.md.
 """
 
-__version__ = "2.0.1"
+__version__ = "2.0.2"
 
 from pkplugin.version import WNVersion
 

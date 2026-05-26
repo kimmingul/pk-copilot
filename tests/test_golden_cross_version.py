@@ -154,16 +154,15 @@ def test_v8_3_matches_expected() -> None:
 
 
 @pytest.mark.golden
-def test_v5_3_does_not_emit_pred_variants() -> None:
-    """v5.3 must NOT include Clast_pred / AUCINF_pred (output_pred_variants=False per docs/04)."""
+def test_v5_3_emits_pred_variants() -> None:
+    """v5.3 must include Clast_pred / AUCINF_pred (output_pred_variants=True per WNL 5.3 Table B-4)."""
     golden = _load_golden(GOLDEN_53 / "expected.json")
     actual = _run_engine(GOLDEN_53 / "synthetic_5_3.csv", "5.3")
 
-    must_not: list[str] = golden["must_not_contain"]  # type: ignore[assignment]
-    for param in must_not:
-        assert param not in actual, (
-            f"v5.3 must NOT emit {param!r}, but it appeared in engine output"
-        )
+    must_have: list[str] = golden["must_contain"]  # type: ignore[assignment]
+    for param in must_have:
+        assert param in actual, f"v5.3 must emit {param!r}, but it was absent from engine output"
+        assert actual[param] is not None, f"v5.3 emitted {param!r} but value is None"
 
 
 @pytest.mark.golden

@@ -75,8 +75,9 @@ def test_warfarin_emax_EC50(fit_warfarin_emax: PDFitResult) -> None:
 # ---------------------------------------------------------------------------
 
 
-# Propofol-BIS-style: ke0~0.26/min; EC50~3 mcg/mL; BIS baseline ~95
-_PROPOFOL_PD_TRUE = {"E0": 95.0, "Emax": -90.0, "EC50": 3.0, "ke0": 0.26}
+# Propofol-BIS-style: Ke0~0.26/min; EC50~3 mcg/mL; BIS baseline ~95
+# Parameter renamed ke0 -> Ke0 per WNL convention (capital K, WNL 6.4 p.385).
+_PROPOFOL_PD_TRUE = {"E0": 95.0, "Emax": -90.0, "EC50": 3.0, "Ke0": 0.26}
 _PROPOFOL_TIMES = np.linspace(0.0, 30.0, 80)
 # Bolus PK: C0=10, k=0.3 (simplified)
 _PROPOFOL_CONC = 10.0 * np.exp(-0.3 * _PROPOFOL_TIMES)
@@ -89,7 +90,7 @@ def fit_propofol_effect_compartment() -> PDFitResult:
         times=_PROPOFOL_TIMES,
         observed_effects=effects,
         model_name="effect_compartment",
-        initial_params={"E0": 90.0, "Emax": -80.0, "EC50": 2.0, "ke0": 0.15},
+        initial_params={"E0": 90.0, "Emax": -80.0, "EC50": 2.0, "Ke0": 0.15},
         concentrations=_PROPOFOL_CONC,
         weighting="uniform",
     )
@@ -106,9 +107,9 @@ def test_propofol_effect_compartment_converged(
 def test_propofol_effect_compartment_ke0(
     fit_propofol_effect_compartment: PDFitResult,
 ) -> None:
-    est = fit_propofol_effect_compartment.parameters["ke0"]
-    rel_err = abs(est - _PROPOFOL_PD_TRUE["ke0"]) / _PROPOFOL_PD_TRUE["ke0"]
-    assert rel_err < 0.01, f"ke0 rel_err={rel_err:.3e}"
+    est = fit_propofol_effect_compartment.parameters["Ke0"]
+    rel_err = abs(est - _PROPOFOL_PD_TRUE["Ke0"]) / _PROPOFOL_PD_TRUE["Ke0"]
+    assert rel_err < 0.01, f"Ke0 rel_err={rel_err:.3e}"
 
 
 @pytest.mark.golden

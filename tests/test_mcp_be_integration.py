@@ -70,7 +70,7 @@ def test_impl_run_be_be_demonstrated(crossover_csv: Path, tmp_path: Path) -> Non
     """impl_run_be should return status=ok and demonstrate BE for the fixture."""
     result = impl_run_be(
         parameter_dataset_path=str(crossover_csv),
-        endpoint="AUC0_t",
+        endpoints=["AUC0_t"],
         design="crossover_2x2",
         audit_dir=str(tmp_path / "audit"),
     )
@@ -78,9 +78,11 @@ def test_impl_run_be_be_demonstrated(crossover_csv: Path, tmp_path: Path) -> Non
     assert result["status"] == "ok", f"Expected ok, got: {result}"
     assert "run_id" in result
     assert "audit_path" in result
-    assert "be_result" in result
+    assert "be_results" in result
 
-    be = result["be_result"]
+    be_results = result["be_results"]
+    assert len(be_results) >= 1
+    be = next(r for r in be_results if r.get("endpoint") == "AUC0_t")
     assert be["design"] == "crossover_2x2"
     assert be["endpoint"] == "AUC0_t"
     assert be["n_subjects"] == 24
@@ -100,7 +102,7 @@ def test_impl_run_be_artifacts(crossover_csv: Path, tmp_path: Path) -> None:
     audit_dir = tmp_path / "audit"
     result = impl_run_be(
         parameter_dataset_path=str(crossover_csv),
-        endpoint="AUC0_t",
+        endpoints=["AUC0_t"],
         design="crossover_2x2",
         audit_dir=str(audit_dir),
     )
@@ -122,7 +124,7 @@ def test_impl_run_be_artifacts(crossover_csv: Path, tmp_path: Path) -> None:
     assert be_csv.exists(), f"be_result.csv not found: {be_csv}"
 
     be_df = pd.read_csv(be_csv)
-    assert len(be_df) == 1, "be_result.csv must have exactly one row"
+    assert len(be_df) >= 1, "be_result.csv must have at least one row"
 
     expected_cols = {
         "run_id",
@@ -213,3 +215,96 @@ def test_build_mcp_registers_run_be_and_summarize_nca() -> None:
     else:
         # If we cannot introspect the tool registry just verify it didn't error.
         assert mcp is not None
+
+
+# ---------------------------------------------------------------------------
+# G7: multi-endpoint run_be
+# ---------------------------------------------------------------------------
+
+
+def test_impl_run_be_multiple_endpoints(crossover_csv: Path, tmp_path: Path) -> None:
+    """impl_run_be with multiple endpoints returns a list of BEResult dicts."""
+    result = impl_run_be(
+        parameter_dataset_path=str(crossover_csv),
+        endpoints=["AUC0_t", "Cmax"],
+        design="crossover_2x2",
+        audit_dir=str(tmp_path / "audit"),
+    )
+    assert result["status"] == "ok"
+    be_results = result["be_results"]
+    endpoints_found = [r["endpoint"] for r in be_results if r.get("status") == "ok"]
+    assert "AUC0_t" in endpoints_found
+
+
+def test_impl_run_be_skips_missing_endpoint_column(crossover_csv: Path, tmp_path: Path) -> None:
+    """Endpoints not present in the CSV are skipped, not errored."""
+    result = impl_run_be(
+        parameter_dataset_path=str(crossover_csv),
+        endpoints=["AUC0_t", "NONEXISTENT_PARAM"],
+        design="crossover_2x2",
+        audit_dir=str(tmp_path / "audit"),
+    )
+    assert result["status"] == "ok"
+    statuses = {r["endpoint"]: r["status"] for r in result["be_results"]}
+    assert statuses.get("AUC0_t") == "ok"
+    assert statuses.get("NONEXISTENT_PARAM") == "skipped"
+
+
+def test_impl_run_be_default_endpoints(crossover_csv: Path, tmp_path: Path) -> None:
+    """Default endpoints (no endpoints arg) processes at least AUC0_t."""
+    result = impl_run_be(
+        parameter_dataset_path=str(crossover_csv),
+        design="crossover_2x2",
+        audit_dir=str(tmp_path / "audit"),
+    )
+    assert result["status"] == "ok"
+    be_results = result["be_results"]
+    assert len(be_results) >= 1
+    # At least one endpoint should process successfully or be skipped
+    assert all("endpoint" in r for r in be_results)
+
+
+# ---------------------------------------------------------------------------
+# G5: user + audit_dir reach controlled mode via impl_run_be
+# ---------------------------------------------------------------------------
+
+
+def test_impl_run_be_controlled_mode(
+    crossover_csv: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Passing user dict with PKPLUGIN_PART11_ENABLED=1 → controlled mode."""
+    monkeypatch.setenv("PKPLUGIN_PART11_ENABLED", "1")
+    monkeypatch.setenv("PKPLUGIN_LLM_ORCHESTRATED", "0")
+
+    result = impl_run_be(
+        parameter_dataset_path=str(crossover_csv),
+        endpoints=["AUC0_t"],
+        design="crossover_2x2",
+        audit_dir=str(tmp_path / "audit"),
+        user={"id": "analyst@example.com", "auth_method": "cli"},
+    )
+    assert result["status"] == "ok"
+    assert result["execution_mode"] == "controlled"
+
+
+def test_impl_run_be_user_in_audit_json(
+    crossover_csv: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """AuditEntry.user is populated from the user dict when provided."""
+    monkeypatch.setenv("PKPLUGIN_PART11_ENABLED", "1")
+    monkeypatch.setenv("PKPLUGIN_LLM_ORCHESTRATED", "0")
+
+    result = impl_run_be(
+        parameter_dataset_path=str(crossover_csv),
+        endpoints=["AUC0_t"],
+        design="crossover_2x2",
+        audit_dir=str(tmp_path / "audit"),
+        user={"id": "qc.analyst@pharma.com", "auth_method": "totp"},
+    )
+    assert result["status"] == "ok"
+    audit_path = Path(result["audit_path"])
+    assert audit_path.exists()
+    import json as _json
+
+    payload = _json.loads(audit_path.read_text())
+    assert payload.get("user") == "qc.analyst@pharma.com"

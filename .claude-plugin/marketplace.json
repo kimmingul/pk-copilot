@@ -14,7 +14,7 @@
       "name": "pk-copilot",
       "source": "./",
       "description": "Phoenix WinNonlin-compatible PK/PD/NCA/Compartmental analysis copilot. Version-aware (WinNonlin 5.3/6.4/8.3), CDISC SDTM/ADaM, 21 CFR Part 11-enabling technical controls (deterministic execution path).",
-      "version": "2.0.1",
+      "version": "2.0.2",
       "author": {
         "name": "Min-Gul Kim",
         "email": "kimmingul@gmail.com"

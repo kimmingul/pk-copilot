@@ -84,7 +84,7 @@ def be_run(tmp_path: Path) -> dict:
 
     result = impl_run_be(
         parameter_dataset_path=str(csv_path),
-        endpoint="AUClast",
+        endpoints=["AUClast"],
         design="crossover_2x2",
         audit_dir=str(tmp_path / "audit"),
     )

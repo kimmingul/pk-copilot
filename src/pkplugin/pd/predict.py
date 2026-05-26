@@ -97,10 +97,13 @@ def _integrate_effect_compartment(
 ) -> NDArray[np.float64]:
     """Integrate effect compartment + apply Emax at each Ce(t).
 
-    dCe/dt = ke0 * (Cp(t) - Ce)
+    dCe/dt = Ke0 * (Cp(t) - Ce)
     E(t) = E0 + Emax * Ce / (EC50 + Ce)
+
+    Ke0: exit rate constant from the effect compartment.
+    WNL output parameter name: Ke0 (capital K). Ref: WNL 6.4 p.385.
     """
-    ke0 = params["ke0"]
+    ke0 = params["Ke0"]
     E0 = params["E0"]
     Emax = params["Emax"]
     EC50 = params["EC50"]
@@ -141,8 +144,11 @@ def _integrate_idr(
 
     IDR-I:   dR/dt = kin * (1 - Imax*C/(IC50+C)) - kout * R
     IDR-II:  dR/dt = kin - kout * (1 - Imax*C/(IC50+C)) * R
-    IDR-III: dR/dt = kin * (1 + Smax*C/(SC50+C)) - kout * R
-    IDR-IV:  dR/dt = kin - kout * (1 + Smax*C/(SC50+C)) * R
+    IDR-III: dR/dt = kin * (1 + Emax*C/(EC50+C)) - kout * R   [WNL Model 53]
+    IDR-IV:  dR/dt = kin - kout * (1 + Emax*C/(EC50+C)) * R   [WNL Model 54]
+
+    WNL estimated parameters for IDR-III/IV: Kin, Kout, EC50, Emax (all versions).
+    Ref: WNL 6.4 p.238 "Model 53 Estimated parameters: Kin Kout EC50 Emax".
     """
     kin = params["kin"]
     kout = params["kout"]
@@ -175,25 +181,25 @@ def _integrate_idr(
         rhs_fn = rhs_ii
 
     elif model_type == PDModelType.IDR_III_STIM_PRODUCTION:
-        Smax = params["Smax"]
-        SC50 = params["SC50"]
+        Emax = params["Emax"]
+        EC50 = params["EC50"]
 
         def rhs_iii(t: float, y: NDArray[np.float64]) -> list[float]:
             r = y[0]
             c = float(cp_func(t))
-            stim = Smax * c / (SC50 + c)
+            stim = Emax * c / (EC50 + c)
             return [kin * (1.0 + stim) - kout * r]
 
         rhs_fn = rhs_iii
 
     else:  # IDR_IV_STIM_LOSS
-        Smax = params["Smax"]
-        SC50 = params["SC50"]
+        Emax = params["Emax"]
+        EC50 = params["EC50"]
 
         def rhs_iv(t: float, y: NDArray[np.float64]) -> list[float]:
             r = y[0]
             c = float(cp_func(t))
-            stim = Smax * c / (SC50 + c)
+            stim = Emax * c / (EC50 + c)
             return [kin - kout * (1.0 + stim) * r]
 
         rhs_fn = rhs_iv

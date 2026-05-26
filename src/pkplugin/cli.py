@@ -131,7 +131,7 @@ def _cmd_be(args: argparse.Namespace) -> int:
 
     result = impl_run_be(
         parameter_dataset_path=args.parameters,
-        endpoint=args.endpoint,
+        endpoints=[args.endpoint],
         design=args.design,
         user=user,
     )

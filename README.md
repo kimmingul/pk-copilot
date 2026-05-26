@@ -3,7 +3,7 @@
 > Phoenix WinNonlin과 수치 호환되는 Pharmacokinetics(PK) / Pharmacodynamics(PD) / NCA / Compartmental Analysis 를 Claude Code에서 자연어로 수행하는 AI 코파일럿 플러그인.
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.0.1-brightgreen)]()
+[![Version](https://img.shields.io/badge/version-2.0.2-brightgreen)]()
 [![WinNonlin Compat](https://img.shields.io/badge/WinNonlin-5.3%20%7C%206.4%20%7C%208.3-brightgreen)]()
 
 ## 한 줄 정의
@@ -32,7 +32,7 @@
 
 ## 빠른 시작
 
-**현재 버전: v2.0.1** (Regulated-Capable Edition — CDISC + Part 11-enabling 기술 통제 포함)
+**현재 버전: v2.0.2** (Regulated-Capable Edition — CDISC + Part 11-enabling 기술 통제 포함)
 
 ```bash
 # Claude Code plugin (예정)
@@ -42,7 +42,7 @@ claude plugin install pk-copilot
 git clone https://github.com/kimmingul/pk-copilot.git
 cd pk-copilot
 uv venv && uv pip install -e ".[dev,mcp,plot,report,cdisc,compliance]"
-uv run pkplugin --version  # 2.0.1
+uv run pkplugin --version  # 2.0.2
 uv run pkplugin doctor
 ```
 

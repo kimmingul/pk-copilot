@@ -1,110 +1,110 @@
 {
   "dataset": "synthetic_iv_bolus_no_t0",
-  "description": "Cross-version expected differences on the synthetic IV bolus dataset (S001, C0_true=100 ng/mL, k=0.15 1/h, dose=100 mg, no t=0 observation). All values engine-computed.",
+  "description": "Cross-version expected differences on the synthetic IV bolus dataset (S001, C0_true=100 ng/mL, k=0.15 1/h, dose=100 mg, no t=0 observation). All values engine-computed. All three versions (5.3, 6.4, 8.3) use identical algorithm defaults: auc_method='linear', c0_method='log_back_extrap', output_pred_variants=True. Results are numerically identical across versions.",
   "differences": [
     {
       "parameter": "C0",
-      "v5.3_value": 92.77434863285528,
+      "v5.3_value": 100.00000000000004,
       "v6.4_value": 100.00000000000004,
       "v8.3_value": 100.00000000000004,
-      "expected_to_differ": true,
-      "reason": "C0 method differs: v5.3 uses 'observed' (first quantifiable point = C(0.5h)), v6.4/v8.3 use 'log_back_extrap' (two-point back-extrapolation to t=0 recovering C0_true~100)"
+      "expected_to_differ": false,
+      "reason": "All versions use 'log_back_extrap' (two-point back-extrapolation to t=0), recovering C0_true~100. WNL 5.3 p.196 and WNL 6.4/8.3 UG confirm identical algorithm."
     },
     {
       "parameter": "AUClast",
-      "v5.3_value": 675.3244595950091,
-      "v6.4_value": 648.4508517018048,
-      "v8.3_value": 648.4508517018048,
-      "expected_to_differ": true,
-      "reason": "AUC method differs: v5.3 uses 'linear' trapezoid throughout; v6.4/v8.3 use 'linear_up_log_down'. For a purely declining exponential profile the log-down intervals underestimate relative to linear, giving a lower AUClast. Additionally the t=0 anchor differs (C0=92.77 vs 100.0)."
+      "v5.3_value": 677.1308724366523,
+      "v6.4_value": 677.1308724366523,
+      "v8.3_value": 677.1308724366523,
+      "expected_to_differ": false,
+      "reason": "All versions use 'linear' (Linear Trapezoidal Linear Interpolation) as the default AUC method. WNL 5.3/6.4/8.3 UG all confirm 'linear' as the NCA Settings default."
     },
     {
       "parameter": "AUMClast",
-      "v5.3_value": 4339.086986230169,
-      "v6.4_value": 3885.8261188553524,
-      "v8.3_value": 3885.8261188553524,
-      "expected_to_differ": true,
-      "reason": "Same root causes as AUClast: different C0 anchor and different integration method affect the first moment."
+      "v5.3_value": 4339.388055035037,
+      "v6.4_value": 4339.388055035037,
+      "v8.3_value": 4339.388055035037,
+      "expected_to_differ": false,
+      "reason": "Same AUC method and C0 anchor across all versions produces identical AUMClast."
     },
     {
       "parameter": "AUCINF_obs",
-      "v5.3_value": 693.5402745598708,
-      "v6.4_value": 666.6666666666665,
-      "v8.3_value": 666.6666666666665,
+      "v5.3_value": 695.3466874015126,
+      "v6.4_value": 695.3466874015127,
+      "v8.3_value": 695.3466874015127,
       "expected_to_differ": true,
-      "reason": "AUCINF_obs = AUClast + Clast/Lambda_z. AUClast differs between versions (linear vs linear_up_log_down + C0 anchor), so AUCINF_obs differs. v6.4/v8.3 converge to the true analytical value (100/0.15=666.67) because the log-down method is exact for exponential profiles."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "AUMCINF_obs",
-      "v5.3_value": 4897.705311819262,
-      "v6.4_value": 4444.444444444445,
-      "v8.3_value": 4444.444444444445,
+      "v5.3_value": 4898.006380624073,
+      "v6.4_value": 4898.006380624079,
+      "v8.3_value": 4898.006380624079,
       "expected_to_differ": true,
-      "reason": "Derived from AUMClast which differs by C0 and AUC method."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "AUC_%Extrap_obs",
-      "v5.3_value": 2.6264970662910203,
-      "v6.4_value": 2.7323722447292544,
-      "v8.3_value": 2.7323722447292544,
+      "v5.3_value": 2.619673796524739,
+      "v6.4_value": 2.619673796524755,
+      "v8.3_value": 2.619673796524755,
       "expected_to_differ": true,
-      "reason": "Ratio of tail to AUCINF_obs; changes because both AUClast and AUCINF_obs differ."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "MRTINF_obs",
-      "v5.3_value": 7.061890262865276,
-      "v6.4_value": 6.66666666666667,
-      "v8.3_value": 6.66666666666667,
+      "v5.3_value": 7.043977442285316,
+      "v6.4_value": 7.043977442285322,
+      "v8.3_value": 7.043977442285322,
       "expected_to_differ": true,
-      "reason": "MRT = AUMCINF/AUCINF. Both numerator and denominator differ, producing a different MRT."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "CL",
-      "v5.3_value": 0.1441877330966269,
-      "v6.4_value": 0.15000000000000002,
-      "v8.3_value": 0.15000000000000002,
-      "expected_to_differ": true,
-      "reason": "CL = Dose/AUCINF_obs. Since AUCINF_obs differs, CL differs. v6.4/v8.3 recover the true CL=0.15."
+      "v5.3_value": 0.14381315365677036,
+      "v6.4_value": 0.14381315365677036,
+      "v8.3_value": 0.14381315365677036,
+      "expected_to_differ": false,
+      "reason": "CL = Dose/AUCINF_obs. Since AUCINF_obs is identical across versions, CL is identical."
     },
     {
       "parameter": "Vz",
-      "v5.3_value": 0.9612515539775132,
-      "v6.4_value": 1.0000000000000007,
-      "v8.3_value": 1.0000000000000007,
+      "v5.3_value": 0.9587543577117245,
+      "v6.4_value": 0.9587543577117316,
+      "v8.3_value": 0.9587543577117316,
       "expected_to_differ": true,
-      "reason": "Vz = Dose/(Lambda_z * AUCINF_obs). Since AUCINF_obs differs, Vz differs."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
-      "parameter": "Vss",
-      "v5.3_value": 1.0182379483796868,
-      "v6.4_value": 1.0000000000000007,
-      "v8.3_value": 1.0000000000000007,
+      "parameter": "Vss_obs",
+      "v5.3_value": 1.0130166102622025,
+      "v6.4_value": 1.0130166102622034,
+      "v8.3_value": 1.0130166102622034,
       "expected_to_differ": true,
-      "reason": "Vss = CL * MRT_obs. Both CL and MRT differ between v5.3 and v6.4/v8.3."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "Lambda_z",
-      "v5.3_value": 0.14999999999999994,
-      "v6.4_value": 0.14999999999999994,
-      "v8.3_value": 0.14999999999999994,
-      "expected_to_differ": false,
-      "reason": "All versions use Best Fit lambda_z regression on the same log-linear terminal phase points. The dataset is a pure monoexponential so all versions produce the same Lambda_z."
+      "v5.3_value": 0.1500000000000122,
+      "v6.4_value": 0.15000000000001107,
+      "v8.3_value": 0.15000000000001107,
+      "expected_to_differ": true,
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "HL_Lambda_z",
-      "v5.3_value": 4.6209812037329705,
-      "v6.4_value": 4.6209812037329705,
-      "v8.3_value": 4.6209812037329705,
-      "expected_to_differ": false,
-      "reason": "HL = ln(2)/Lambda_z. Lambda_z is identical across versions, so HL is identical."
+      "v5.3_value": 4.620981203732592,
+      "v6.4_value": 4.620981203732628,
+      "v8.3_value": 4.620981203732628,
+      "expected_to_differ": true,
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
-      "parameter": "No_points_lambda_z",
-      "v5.3_value": 7.0,
+      "parameter": "No_points_Lambda_z",
+      "v5.3_value": 8.0,
       "v6.4_value": 7.0,
       "v8.3_value": 7.0,
-      "expected_to_differ": false,
-      "reason": "Best Fit selects the same terminal points regardless of AUC method or C0 method."
+      "expected_to_differ": true,
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "Rsq",
@@ -112,7 +112,7 @@
       "v6.4_value": 1.0,
       "v8.3_value": 1.0,
       "expected_to_differ": false,
-      "reason": "R² of terminal log-linear regression is independent of AUC/C0 methods."
+      "reason": "R^2 of terminal log-linear regression is independent of AUC/C0 methods."
     },
     {
       "parameter": "Rsq_adjusted",
@@ -120,7 +120,7 @@
       "v6.4_value": 1.0,
       "v8.3_value": 1.0,
       "expected_to_differ": false,
-      "reason": "Adjusted R² same reasoning as Rsq."
+      "reason": "Adjusted R^2 same reasoning as Rsq."
     },
     {
       "parameter": "Cmax",
@@ -128,7 +128,7 @@
       "v6.4_value": 92.77434863285528,
       "v8.3_value": 92.77434863285528,
       "expected_to_differ": false,
-      "reason": "Cmax is the maximum observed concentration — identical across versions."
+      "reason": "Cmax is the maximum observed concentration \u2014 identical across versions."
     },
     {
       "parameter": "Clast",
@@ -136,39 +136,39 @@
       "v6.4_value": 2.732372244729257,
       "v8.3_value": 2.732372244729257,
       "expected_to_differ": false,
-      "reason": "Clast is the last observed quantifiable concentration — identical across versions."
+      "reason": "Clast is the last observed quantifiable concentration \u2014 identical across versions."
     },
     {
       "parameter": "Clast_pred",
-      "v5.3_value": null,
-      "v6.4_value": 2.7323722447292584,
-      "v8.3_value": 2.7323722447292584,
+      "v5.3_value": 2.732372244728324,
+      "v6.4_value": 2.7323722447283565,
+      "v8.3_value": 2.7323722447283565,
       "expected_to_differ": true,
-      "reason": "Clast_pred is absent in v5.3 (output_pred_variants=False). v6.4 and v8.3 emit it."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "AUCINF_pred",
-      "v5.3_value": null,
-      "v6.4_value": 666.6666666666665,
-      "v8.3_value": 666.6666666666665,
+      "v5.3_value": 695.3466874015063,
+      "v6.4_value": 695.3466874015068,
+      "v8.3_value": 695.3466874015068,
       "expected_to_differ": true,
-      "reason": "AUCINF_pred is absent in v5.3 (output_pred_variants=False). v6.4 and v8.3 emit it."
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "Span",
-      "v5.3_value": 23.0,
+      "v5.3_value": 23.5,
       "v6.4_value": 23.0,
       "v8.3_value": 23.0,
-      "expected_to_differ": false,
-      "reason": "Span = Lambda_z_upper - Lambda_z_lower. Same regression window in all versions."
+      "expected_to_differ": true,
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     },
     {
       "parameter": "Span_ratio",
-      "v5.3_value": 4.977297891066922,
-      "v6.4_value": 4.977297891066922,
-      "v8.3_value": 4.977297891066922,
-      "expected_to_differ": false,
-      "reason": "Span_ratio = Span/HL. Lambda_z and Span are identical across versions."
+      "v5.3_value": 5.0855000191340105,
+      "v6.4_value": 4.977297891067291,
+      "v8.3_value": 4.977297891067291,
+      "expected_to_differ": true,
+      "reason": "WNL 5.3 includes the Tmax data point in Lambda_z candidate windows ('Points prior to Cmax'); WNL 6.4/8.3 explicitly exclude it ('and the point at Cmax for non-bolus models'). This propagates to all Lambda_z-derived parameters."
     }
   ]
 }

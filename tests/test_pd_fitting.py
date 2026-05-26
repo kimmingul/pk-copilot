@@ -122,8 +122,11 @@ def test_fit_sigmoid_emax_recovers_gamma() -> None:
 
 
 def test_fit_effect_compartment_recovers_ke0() -> None:
-    """Fit effect compartment model to synthetic data; recover ke0."""
-    true_params = {"E0": 0.0, "Emax": 1.0, "EC50": 2.0, "ke0": 0.5}
+    """Fit effect compartment model to synthetic data; recover Ke0.
+
+    Parameter renamed ke0 -> Ke0 per WNL convention (capital K, WNL 6.4 p.385).
+    """
+    true_params = {"E0": 0.0, "Emax": 1.0, "EC50": 2.0, "Ke0": 0.5}
     times = np.linspace(0.0, 20.0, 60)
     # Bolus PK driver
     conc = 10.0 * np.exp(-0.3 * times)
@@ -133,15 +136,15 @@ def test_fit_effect_compartment_recovers_ke0() -> None:
         times=times,
         observed_effects=effects,
         model_name="effect_compartment",
-        initial_params={"E0": 0.1, "Emax": 0.8, "EC50": 1.5, "ke0": 0.3},
+        initial_params={"E0": 0.1, "Emax": 0.8, "EC50": 1.5, "Ke0": 0.3},
         concentrations=conc,
         weighting="uniform",
     )
 
     assert result.diagnostics.converged
-    ke0_est = result.parameters["ke0"]
-    rel_err = abs(ke0_est - true_params["ke0"]) / true_params["ke0"]
-    assert rel_err < 0.01, f"Effect compartment: ke0 rel_err={rel_err:.2e} > 1e-2"
+    ke0_est = result.parameters["Ke0"]
+    rel_err = abs(ke0_est - true_params["Ke0"]) / true_params["Ke0"]
+    assert rel_err < 0.01, f"Effect compartment: Ke0 rel_err={rel_err:.2e} > 1e-2"
 
 
 # ---------------------------------------------------------------------------

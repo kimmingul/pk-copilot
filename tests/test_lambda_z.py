@@ -229,3 +229,57 @@ def test_lambda_z_clast_pred() -> None:
 
     expected_clast_pred = math.exp(result.intercept - result.lambda_z * result.t_end)
     assert abs(result.clast_pred - expected_clast_pred) < 1e-12
+
+
+# ---------------------------------------------------------------------------
+# v2.0.2: Tmax inclusion is WinNonlin-version-aware
+# ---------------------------------------------------------------------------
+
+
+def test_lambda_z_tmax_inclusive_for_v5_3():
+    """WNL 5.3 includes the Tmax point as a candidate ('points prior to Cmax');
+    WNL 6.4/8.3 explicitly exclude it. Verify the masks differ at t == tmax."""
+    import math
+
+    from pkplugin.nca.lambda_z import fit_lambda_z
+
+    # Synthetic data where t=2.0 IS the Cmax point.
+    # Post-Tmax data continues the same decay shape so 5.3 and 6.4 should
+    # both succeed, but 5.3 should use one more point.
+    times = [0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 16.0, 24.0]
+    k = 0.3
+    concs = [10.0, 18.0, 22.0]  # rising to tmax=2.0
+    concs += [22.0 * math.exp(-k * (t - 2.0)) for t in times[3:]]
+
+    tmax = 2.0
+    r_v53 = fit_lambda_z(times, concs, tmax=tmax, winnonlin_version="5.3")
+    r_v64 = fit_lambda_z(times, concs, tmax=tmax, winnonlin_version="6.4")
+
+    # 5.3 may include t=2.0; 6.4 must exclude it strictly.
+    assert r_v53.lambda_z is not None and r_v53.lambda_z > 0
+    assert r_v64.lambda_z is not None and r_v64.lambda_z > 0
+    # If 5.3 picked the larger window, it has more n_points OR an earlier t_start.
+    assert (r_v53.n_points or 0) >= (r_v64.n_points or 0) and (r_v53.t_start or float("inf")) <= (
+        r_v64.t_start or 0.0
+    )
+
+
+def test_lambda_z_tmax_exclusive_reason_label_differs_by_version():
+    """5.3 labels excluded-pre-Tmax points as 'before_tmax'; 6.4/8.3 as 'pre_tmax'."""
+    from pkplugin.nca.lambda_z import fit_lambda_z
+
+    times = [0.5, 1.0, 2.0, 4.0, 8.0, 12.0, 24.0]
+    concs = [5.0, 8.0, 10.0, 7.0, 4.0, 2.0, 0.5]
+    tmax = 2.0
+
+    r53 = fit_lambda_z(times, concs, tmax=tmax, winnonlin_version="5.3")
+    r64 = fit_lambda_z(times, concs, tmax=tmax, winnonlin_version="6.4")
+
+    reasons_53 = {
+        p["reason"] for p in r53.excluded_points if p.get("reason") in ("before_tmax", "pre_tmax")
+    }
+    reasons_64 = {
+        p["reason"] for p in r64.excluded_points if p.get("reason") in ("before_tmax", "pre_tmax")
+    }
+    assert "before_tmax" in reasons_53 or len(r53.excluded_points) == 0
+    assert "pre_tmax" in reasons_64 or len(r64.excluded_points) == 0

@@ -68,7 +68,7 @@ res = mod.fit(reml=True)
 CI_low  = exp( (μ_T - μ_R) - t_{0.05, df} · SE )
 CI_high = exp( (μ_T - μ_R) + t_{0.05, df} · SE )
 ```
-- `df`: Satterthwaite 또는 Kenward-Roger (구현 옵션)
+- `df`: Satterthwaite approximation (WNL Phoenix BE module default; confirmed WNL 8.3 UG §BE). Kenward-Roger is NOT a WinNonlin option.
 
 ### 3.3 ABE 결정
 ```
@@ -161,7 +161,7 @@ ln_y_R ~ N(μ_R, σ_R²)
 | Sequence effect | Yes | Yes |
 | Period effect | Yes | Yes |
 
-📋 TODO: WinNonlin Phoenix BE 모듈 매뉴얼의 df 계산법 (Satterthwaite vs Kenward-Roger 기본값) 검증.
+df 계산법 확인 완료: WinNonlin Phoenix BE module은 Satterthwaite approximation만 사용 (WNL 8.3 UG §BE). Kenward-Roger는 WinNonlin BE 모듈에 없음. Power calculation은 noncentral t-distribution 기반 (noncentrality parameter: `δ = (ln GMR_upper - ln GMR_lower) / (2 · SE)`) — WNL 8.3 UG §BE.6.
 
 ---
 

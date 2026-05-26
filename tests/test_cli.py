@@ -2,7 +2,7 @@
 Tests for the pkplugin CLI (pkplugin.cli.main).
 
 Tests:
-  1. pkplugin --version prints "2.0.1".
+  1. pkplugin --version prints "2.0.2".
   2. pkplugin doctor returns exit code 0 and lists numpy/scipy/pandas.
   3. pkplugin sbom produces valid JSON with bomFormat "CycloneDX".
   4. pkplugin nca on a tiny CSV returns exit code 0 and emits results.
@@ -70,7 +70,7 @@ def test_version_flag(capsys: pytest.CaptureFixture[str]) -> None:
         main(["--version"])
     assert exc_info.value.code == 0
     captured = capsys.readouterr()
-    assert "2.0.1" in captured.out
+    assert "2.0.2" in captured.out
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +143,7 @@ def test_be_on_crossover_csv_returns_zero(
     assert code == 0, f"Expected exit 0; stderr: {err}"
     doc = json.loads(out)
     assert doc["status"] == "ok"
-    assert "be_result" in doc
+    assert "be_results" in doc
 
 
 # ---------------------------------------------------------------------------

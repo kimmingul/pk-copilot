@@ -65,7 +65,7 @@ rules:
 
 | 버전 | Pre-dose | Up-leading | Embedded | Trailing | 비고 |
 |---|---|---|---|---|---|
-| WinNonlin 5.3 | 0 | 0 | missing | exclude | 📋 TODO: 매뉴얼 확인 |
+| WinNonlin 5.3 | 0 | 0 | missing | exclude | WNL 5.3 p.195 confirms same policy as 6.4 |
 | WinNonlin 6.4 | 0 | 0 | missing | exclude | 매뉴얼 §7.5 |
 | WinNonlin 8.3 | 0 | 0 | missing | exclude | 매뉴얼 §8.4 |
 

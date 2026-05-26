@@ -356,6 +356,7 @@ def new_entry(
     execution_mode: str = "exploratory",
     llm_orchestrated: bool = False,
     llm_transcript_hash: str | None = None,
+    user: dict[str, str] | None = None,
 ) -> AuditEntry:
     """Convenience factory that populates all boilerplate fields.
 
@@ -389,13 +390,19 @@ def new_entry(
 
     pkplugin_ver = dep_versions.get("pkplugin", "unknown")
 
+    # Format user as a string representation for the audit record.
+    user_str: str | None = None
+    if user is not None:
+        uid = user.get("id") or user.get("username") or str(user)
+        user_str = uid
+
     return AuditEntry(
         run_id=new_run_id(),
         tool=tool,
         timestamp_utc=timestamp_utc,
         pkplugin_version=pkplugin_ver,
         winnonlin_compat=winnonlin_compat,
-        user=None,  # v2.0: populated from authenticated session
+        user=user_str,
         input_files=input_files,
         config=config,
         dependency_versions=dep_versions,

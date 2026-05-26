@@ -266,9 +266,11 @@ def test_aic_bic_hand_check() -> None:
     k = result.diagnostics.n_params_estimated
     rss = result.diagnostics.rss
 
-    # WinNonlin convention
-    expected_aic = n * math.log(rss / n) + 2.0 * k
-    expected_bic = n * math.log(rss / n) + k * math.log(n)
+    # WinNonlin convention: AIC = N*ln(WRSS) + 2P, BIC = N*ln(WRSS) + P*ln(N)
+    # (WNL 8.3 UG p.547 — note: WNL omits the -N*ln(N) term present in the
+    # classical Akaike formula; confirmed by manual cross-check against WNL output)
+    expected_aic = n * math.log(rss) + 2.0 * k
+    expected_bic = n * math.log(rss) + k * math.log(n)
 
     assert math.isfinite(result.diagnostics.aic)
     assert math.isfinite(result.diagnostics.bic)

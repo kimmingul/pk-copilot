@@ -152,14 +152,15 @@ AUMC_inf = AUMC_0-Tlast + Tlast · Clast / λz + Clast / λz²
 
 ## 8. 버전별 기본값
 
-| 버전 | 기본 AUC 방법 | 비고 |
+| 버전 | 기본 AUC 방법 | 출처 |
 |---|---|---|
-| WinNonlin 5.3 | `linear`* | GUI 기본 (옵션 변경 가능) |
-| WinNonlin 6.4 | `linear_up_log_down` | |
-| WinNonlin 8.3 | `linear_up_log_down` | |
-| pk-copilot 기본 | `linear_up_log_down` | `winnonlin_version` 옵션이 우선 |
+| WinNonlin 5.3 | `linear` | WNL 5.3 NCA Settings GUI 기본값 (WNL 5.3 p.196 확인) |
+| WinNonlin 6.4 | `linear` | WNL 6.4 UG §7.2.3 — Linear Trapezoidal Linear Interpolation |
+| WinNonlin 8.3 | `linear` | WNL 8.3 UG §8.2.1 — 동일 |
+| pk-copilot 기본 | `linear` | `winnonlin_version` 옵션 따름 (모든 버전 동일) |
 
-*📋 TODO: 5.3 매뉴얼에서 GUI 기본값 정확히 확인
+모든 WinNonlin 버전의 기본 AUC 방법은 `linear` (Linear Trapezoidal Linear Interpolation)입니다.
+`linear_up_log_down`은 선택 옵션이며 어떤 버전에서도 기본값이 아닙니다.
 
 ---
 

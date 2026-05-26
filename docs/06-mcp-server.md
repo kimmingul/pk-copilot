@@ -54,9 +54,9 @@ def run_nca(
 ```python
 def run_be(
     parameter_dataset_path: str,
-    design: BEDesign,
+    design: BEDesign = "crossover_2x2",
     endpoints: list[str] = ["AUC0_t", "AUC0_inf", "Cmax"],
-) -> BEResult
+) -> dict  # {"be_results": [BEResult, ...], "be_demonstrated": bool | None}
 ```
 - crossover / parallel
 - mixed model + TOST + 90% CI
@@ -102,10 +102,11 @@ def simulate(
 ```python
 def generate_report(
     run_id: str,
-    format: Literal["html", "pdf", "quarto", "docx"] = "html",
-    template: str = "winnonlin_compat",
+    format: Literal["html", "pdf"] = "html",
 ) -> ArtifactPaths
 ```
+- 지원 형식: `"html"` (기본값), `"pdf"`
+- `"quarto"` / `"docx"` 형식은 지원하지 않습니다. (v2.1 예정)
 
 ### 8. `compare_against_reference` (v0.5)
 ```python

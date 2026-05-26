@@ -7,25 +7,24 @@
 | WinNonlin Model # | 설명 | pk-copilot 코드 (canonical) |
 |---|---|---|
 | 1 | 1-cmt IV bolus | `cmt1_iv_bolus` |
-| 2 | 1-cmt IV bolus + MM elim | `cmt1_iv_mm` |
-| 3 | 1-cmt IV infusion | `cmt1_iv_infusion` |
-| 4 | 1-cmt IV infusion + MM | *(not implemented)* |
-| 5 | 1-cmt PO + lag | `cmt1_po` |
-| 6 | 1-cmt PO + MM | `cmt1_po_mm` |
-| 7 | 2-cmt IV bolus | `cmt2_iv_bolus` |
-| 8 | 2-cmt IV bolus + MM | `cmt2_iv_mm` |
-| 9 | 2-cmt IV infusion | `cmt2_iv_infusion` |
-| 10 | 2-cmt IV infusion + MM | *(not implemented)* |
-| 11 | 2-cmt PO | `cmt2_po` |
-| 12 | 2-cmt PO + MM | *(not implemented)* |
-| 13 | 3-cmt IV bolus | `cmt3_iv_bolus` |
-| 14 | 3-cmt IV infusion | *(not implemented)* |
-| 15 | 3-cmt PO | *(not implemented)* |
+| 2 | 1-cmt IV infusion | `cmt1_iv_infusion` |
+| 3 | 1-cmt PO no lag | `cmt1_po` |
+| 4 | 1-cmt PO + lag | *(not implemented)* |
+| 5 | 2-cmt IV bolus | `cmt2_iv_bolus` |
+| 6 | 2-cmt IV infusion | `cmt2_iv_infusion` |
+| 7 | 2-cmt PO no lag | `cmt2_po` |
+| 8 | 2-cmt PO + lag | *(not implemented)* |
+| 9 | 3-cmt IV bolus | *(not implemented)* |
+| 10 | 3-cmt IV infusion | *(not implemented)* |
+| 11 | 3-cmt PO no lag | *(not implemented)* |
+| 18 | 3-cmt IV bolus (WNL 6.4+) | `cmt3_iv_bolus` |
+| 301–304 | MM models (MM.LIB; separate library) | `cmt1_iv_mm`, `cmt1_po_mm`, `cmt2_iv_mm` |
 
 **Canonical name convention**: Use the short form (e.g. `cmt1_iv_mm`, not `cmt1_iv_bolus_mm`).
-MM models are ODE-only (no closed-form solution); Vmax in concentration/time units, Km in concentration units.
+MM models are in the separate MM.LIB file (model IDs 301–304); ODE-only (no closed-form solution).
+Vmax in concentration/time units, Km in concentration units.
 
-📋 TODO: WinNonlin 버전별 model 번호 매핑 (5.3/6.4/8.3) 정확히 검증
+Sources: WNL 5.3 p.196 Table B-1; WNL 6.4 UG §10 model table; WNL 8.3 UG §11 model table.
 
 ---
 
@@ -149,7 +148,7 @@ res = lmfit.minimize(residual, params, args=(times, conc), method="leastsq")
 |---|---|---|
 | `uniform` (=1) | `w_i = 1` | 동일 가중 |
 | `1/y` | `w_i = 1 / |C_i|` | 작은 농도 강조 |
-| `1/y²` | `w_i = 1 / C_i²` | 더 강조 (WinNonlin 기본) |
+| `1/y²` | `w_i = 1 / C_i²` | 더 강조 (WinNonlin 6.4/8.3 기본; 5.3은 uniform) |
 | `1/pred` | `w_i = 1 / |Ĉ_i|` | iterative |
 | `1/pred²` | `w_i = 1 / Ĉ_i²` | iterative |
 
@@ -184,12 +183,12 @@ ka_init = 1.5 · k_init  (PO; ka > k 가정)
 | Residuals vs Predicted | trend 없어야 |
 | Weighted Residuals | NONMEM-style |
 | QQ plot | 정규성 검사 |
-| AIC | `AIC = 2k - 2·ln(L)` |
-| BIC | `BIC = k·ln(n) - 2·ln(L)` |
+| AIC | `AIC = N·ln(WRSS) + 2P` (WNL convention; WNL 8.3 UG p.547) |
+| BIC | `BIC = N·ln(WRSS) + P·ln(N)` (WNL convention) |
 | Condition number | parameter correlation |
 | Profile CI | likelihood profile |
 
-> **AIC 정의 주의**: WinNonlin은 `AIC = N·ln(SS/N) + 2k` 형태를 쓰는 경우가 있음. 정확한 정의 매뉴얼별로 확인 필요. **두 가지 모두 지원하고 옵션으로 명시**.
+> **AIC 정의**: WinNonlin은 `AIC = N·ln(WRSS) + 2P` 형태를 사용 (WNL 8.3 UG p.547). 이는 고전적 `2k - 2ln(L)` 공식과 `-N·ln(N)` 만큼 차이나지만 모델 비교 순위는 동일함.
 
 ---
 
