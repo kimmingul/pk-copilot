@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/claude-plugin-marketplace.json",
   "name": "kimmingul-marketplace",
   "owner": {
     "name": "Min-Gul Kim",
@@ -8,15 +7,18 @@
   },
   "metadata": {
     "description": "Personal Claude Code plugin marketplace by Min-Gul Kim (pharmacometrics tooling)",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "plugins": [
     {
       "name": "pk-copilot",
-      "source": ".",
+      "source": "./",
       "description": "Phoenix WinNonlin-compatible PK/PD/NCA/Compartmental analysis copilot. Version-aware (WinNonlin 5.3/6.4/8.3), CDISC SDTM/ADaM, 21 CFR Part 11-enabling technical controls (deterministic execution path).",
       "version": "2.0.1",
-      "category": "data-science",
+      "author": {
+        "name": "Min-Gul Kim",
+        "email": "kimmingul@gmail.com"
+      },
       "keywords": [
         "pharmacokinetics",
         "pharmacodynamics",
@@ -25,13 +27,7 @@
         "cdisc",
         "part11",
         "biostatistics"
-      ],
-      "homepage": "https://github.com/kimmingul/pk-copilot",
-      "license": "Apache-2.0",
-      "author": {
-        "name": "Min-Gul Kim",
-        "email": "kimmingul@gmail.com"
-      }
+      ]
     }
   ]
 }
